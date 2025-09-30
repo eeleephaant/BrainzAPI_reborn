@@ -15,7 +15,7 @@ type Lesson struct {
 	EndTime       time.Time   `json:"end_time"`
 	Num           uint        `json:"num"`
 	GroupID       uint        `json:"group_id"`
-	Group         Group       `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	Group         Group       `gorm:"foreignKey:GroupID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 	InstitutionID uint        `json:"institution_id"`
-	Institution   Institution `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	Institution   Institution `gorm:"foreignKey:InstitutionID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 }

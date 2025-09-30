@@ -16,6 +16,7 @@ func LessonToDTO(lesson models.Lesson) dtos.LessonDto {
 		Num:           lesson.Num,
 		GroupID:       lesson.GroupID,
 		InstitutionID: lesson.InstitutionID,
+		GroupName:     lesson.Group.Name,
 	}
 }
 
