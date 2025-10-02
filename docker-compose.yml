@@ -71,6 +71,8 @@ services:
         limits:
           memory: 500m
           cpus: "0.5"
+    networks:
+      - appnet
 
 volumes:
   postgres_data:
