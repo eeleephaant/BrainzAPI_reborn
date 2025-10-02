@@ -9,7 +9,7 @@ type LessonDto struct {
 	TeacherName   string    `json:"teacher_name"`
 	StartTime     time.Time `json:"start_time"`
 	EndTime       time.Time `json:"end_time"`
-	Num           uint      `json:"num"`
+	Num           uint8     `json:"num"`
 	GroupID       uint      `json:"group_id"`
 	GroupName     string    `json:"group_name"`
 	InstitutionID uint      `json:"institution_id"`

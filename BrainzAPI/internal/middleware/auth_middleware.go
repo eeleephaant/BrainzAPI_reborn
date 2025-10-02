@@ -2,53 +2,64 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"time"
 
 	"brainz-api/internal/models/dtos"
 
+	"github.com/bytedance/sonic"
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
-func AuthMiddleware(verifyURL string) app.HandlerFunc {
+func AuthMiddleware(verifyURL string, client *http.Client) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		apiKey := string(ctx.Request.Header.Peek("X-API-Key"))
 		if apiKey == "" {
-			ctx.JSON(http.StatusUnauthorized, map[string]string{"error": "missing api key"})
-			ctx.Abort()
+			abort(ctx, http.StatusUnauthorized, "missing api key")
 			return
 		}
 
-		client := &http.Client{Timeout: 3 * time.Second}
-		req, err := http.NewRequestWithContext(
-			c, http.MethodGet, fmt.Sprintf("%s?key=%s", verifyURL, url.QueryEscape(apiKey)), nil,
-		)
+		u, _ := url.Parse(verifyURL)
+		q := u.Query()
+		q.Set("key", apiKey)
+		u.RawQuery = q.Encode()
 
+		req, err := http.NewRequestWithContext(c, http.MethodGet, u.String(), nil)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
-			ctx.Abort()
+			abort(ctx, http.StatusInternalServerError, "internal error")
 			return
 		}
 
 		resp, err := client.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			ctx.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid api key"})
-			ctx.Abort()
+		if err != nil {
+			abort(ctx, http.StatusUnauthorized, "invalid api key")
 			return
 		}
 		defer resp.Body.Close()
 
-		var authResp dtos.AuthResult
+		if resp.StatusCode != http.StatusOK {
+			abort(ctx, http.StatusUnauthorized, "invalid api key")
+			return
+		}
 
-		if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil || !authResp.Status {
-			ctx.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid api key"})
-			ctx.Abort()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			abort(ctx, http.StatusUnauthorized, "invalid api key")
+			return
+		}
+
+		var authResp dtos.AuthResult
+		if err := sonic.Unmarshal(body, &authResp); err != nil || !authResp.Status {
+			abort(ctx, http.StatusUnauthorized, "invalid api key")
 			return
 		}
 
 		ctx.Next(c)
 	}
+}
+
+func abort(ctx *app.RequestContext, code int, msg string) {
+	ctx.JSON(code, map[string]string{"error": msg})
+	ctx.Abort()
 }
