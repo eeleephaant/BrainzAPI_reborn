@@ -82,8 +82,12 @@ class Lesson:
             cursor = conn.cursor()
 
             cursor.execute(
-                "SELECT id FROM lessons WHERE start_time = %s AND group_id = %s AND num = %s",
-                (self.start_time, self.institution_group_id, self.lesson_num)
+                """
+                SELECT id FROM lessons 
+                WHERE start_time = %s AND group_id = %s AND num = %s 
+                AND name = %s AND teacher_name = %s
+                """,
+                (self.start_time, self.institution_group_id, self.lesson_num, self.name, self.teacher)
             )
             result = cursor.fetchone()
             if result is None:
