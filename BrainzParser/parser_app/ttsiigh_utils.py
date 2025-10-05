@@ -121,9 +121,9 @@ class XLSXParser(AbstractScheduleParser):
                         lesson_timings=lesson_timings,
                         date=self.extract_date(),
                         lesson_num=pair_ordinal,
-                        cab_num=pair_cab_num.strip(),
-                        name=pair_name,
-                        teacher=pair_teacher,
+                        cab_num=str(pair_cab_num).strip(),
+                        name=str(pair_name),
+                        teacher=str(pair_teacher),
                         institution_id=1,
                         group=group_name
                     ))
