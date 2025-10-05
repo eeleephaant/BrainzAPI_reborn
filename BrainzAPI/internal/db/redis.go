@@ -1,6 +1,7 @@
 package db
 
 import (
+	wsmodels "brainz-api/internal/models/ws_models"
 	"context"
 	"log"
 	"os"
@@ -21,5 +22,12 @@ func ConnectRedis() {
 	_, err := RedisClient.Ping(Ctx).Result()
 	if err != nil {
 		log.Fatal("failed to connect to Redis:", err)
+	}
+}
+
+func RedisEventsListener() {
+	pubsub := RedisClient.PSubscribe(Ctx, "info_stream:*")
+	for msg := range pubsub.Channel() {
+		wsmodels.MainHub.Broadcast(msg.Channel, []byte(msg.Payload))
 	}
 }

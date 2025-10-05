@@ -5,11 +5,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
+	"brainz-api/internal/db"
 	"brainz-api/internal/models/dtos"
 
 	"github.com/bytedance/sonic"
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/redis/go-redis/v9"
 )
 
 func AuthMiddleware(verifyURL string, client *http.Client) app.HandlerFunc {
@@ -17,6 +20,18 @@ func AuthMiddleware(verifyURL string, client *http.Client) app.HandlerFunc {
 		apiKey := string(ctx.Request.Header.Peek("X-API-Key"))
 		if apiKey == "" {
 			abort(ctx, http.StatusUnauthorized, "missing api key")
+			return
+		}
+
+		cacheKey := "api_key:" + apiKey
+
+		_, err := db.RedisClient.GetEx(c, cacheKey, 2*time.Minute).Result()
+		if err == nil {
+			ctx.Next(c)
+			return
+		}
+		if err != redis.Nil {
+			abort(ctx, http.StatusInternalServerError, "redis error")
 			return
 		}
 
@@ -54,6 +69,8 @@ func AuthMiddleware(verifyURL string, client *http.Client) app.HandlerFunc {
 			abort(ctx, http.StatusUnauthorized, "invalid api key")
 			return
 		}
+
+		db.RedisClient.Set(c, cacheKey, "valid", 5*time.Minute)
 
 		ctx.Next(c)
 	}

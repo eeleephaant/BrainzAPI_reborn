@@ -1,27 +1,34 @@
-FROM python:3.13-slim-bookworm AS builder
+FROM python:3.13-alpine3.22 AS builder
 
 WORKDIR /parser_app
 
-RUN apt-get update && apt-get install -y \
-	libpq-dev \
-	python3-dev \
-	gcc \
-	--no-install-recommends && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache \
+    build-base \
+    libpq-dev \
+    python3-dev \
+    linux-headers \
+    bash \
+	tini
 
-COPY ./requirements.txt /parser_app/requirements.txt
+
+COPY ./parser_app/requirements.txt /parser_app/requirements.txt
 
 RUN pip install --no-compile --no-cache-dir --upgrade -r /parser_app/requirements.txt
 
-COPY . /parser_app
+COPY ./parser_app /parser_app
 
-FROM python:3.13-slim-bookworm
+FROM python:3.13-alpine3.22
 
-WORKDIR /parser_app
+WORKDIR /
 
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /parser_app /parser_app
 
+COPY --from=builder /sbin/tini /sbin/tini
+
 ENV PYTHONPATH=/parser_app
 ENV PYTHONDONTWRITEBYTECODE=1
 
-CMD ["fastapi", "run", "api.py", "--port", "80"]
+ENTRYPOINT ["/sbin/tini", "--"]
+
+CMD ["sh", "-c", "python -m parser_app.worker & fastapi run parser_app/api.py --port 80"]

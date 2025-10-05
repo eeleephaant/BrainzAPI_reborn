@@ -1,23 +1,16 @@
-import csv
 import json
-import os
 import re
 from datetime import datetime
 from typing import IO, Union
 from io import BytesIO
 
 import psycopg2
-import requests
 import openpyxl
-from bs4 import BeautifulSoup
-from icecream import ic
 
-
-import settings
 import utils
 from dataclassesa import Lesson, LessonTimings, AbstractScheduleParser
 
-local_timings = LessonTimings.from_json("data/ttsiigh/lesson_timings.json")
+local_timings = LessonTimings.from_json("./parser_app/data/ttsiigh/lesson_timings.json")
 institution_id = 1
 
 
@@ -70,6 +63,7 @@ class XLSXParser(AbstractScheduleParser):
             formatted_date = f"{day.zfill(2)}.{month}.{year}"
             date_obj = datetime.strptime(formatted_date, "%d.%m.%Y")
             return date_obj
+        return None
 
     def __get_group_coord(self) -> utils.Vector2:
         for sheet in self.book.worksheets:
@@ -137,7 +131,6 @@ class XLSXParser(AbstractScheduleParser):
             row += 3
         return lessons
 
-
 def get_group_id_by_name(name: str) -> Union[int, None]:
     with psycopg2.connect(
             dsn=utils.DSN
@@ -149,6 +142,24 @@ def get_group_id_by_name(name: str) -> Union[int, None]:
         group_id = cursor.fetchone()[0]
         return group_id
 
+def add_schedule_from_xlsx(file: IO[bytes]) -> bool:
+    parser = XLSXParser(file)
+    groups = parser.extract_groups()
+    raw_date = parser.extract_date()
+
+    if schedule_exists(raw_date):
+        return False
+
+    add_groups(groups)
+    lessons = parser.extract_lessons(local_timings)
+
+    for lesson in lessons:
+        lesson.write_to_bd()
+
+    channel = "info_stream:1"
+    message = {"type": "new schedule", "date": raw_date.strftime("%Y-%m-%d")}
+    utils.redis_client.publish(channel, json.dumps(message))
+    return True
 
 def add_groups(groups_list: list[str]):
     with psycopg2.connect(

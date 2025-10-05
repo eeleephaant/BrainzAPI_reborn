@@ -1,7 +1,7 @@
 package mappers
 
 import (
-	"brainz-api/internal/models"
+	models "brainz-api/internal/models/db_models"
 	"brainz-api/internal/models/dtos"
 )
 

@@ -1,16 +1,16 @@
+import json
 import os
 from typing import Awaitable, Callable
 from fastapi import FastAPI, Request, Response, UploadFile, File
 from fastapi.responses import JSONResponse
 import httpx
 
-from parser_app import ttsiigh_utils
+from parser_app import ttsiigh_utils, utils
 from ttsiigh_utils import XLSXParser
 
 app = FastAPI()
 
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://brainz-auth:8080/auth")
-
 @app.middleware("http")
 async def api_key_middleware(
     request: Request,
@@ -72,7 +72,11 @@ async def parse_rsp(file: UploadFile = File(...)):
 
         for lesson in lessons:
             lesson.write_to_bd()
-
+            
+        channel = "info_stream:1"
+        message = {"type": "new schedule", "date": raw_date.strftime("%Y-%m-%d")}
+        utils.redis_client.publish(channel, json.dumps(message))
+        
         return JSONResponse(
             content={
                 "status": True,
@@ -84,6 +88,8 @@ async def parse_rsp(file: UploadFile = File(...)):
             status_code=200
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             content={"status": False, "message": "internal error"},
             status_code=500

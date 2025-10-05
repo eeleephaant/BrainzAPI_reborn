@@ -2,7 +2,7 @@ package handler
 
 import (
 	"brainz-api/internal/db"
-	"brainz-api/internal/models"
+	models "brainz-api/internal/models/db_models"
 	"brainz-api/internal/models/dtos"
 	"brainz-api/internal/models/mappers"
 	"context"
@@ -99,12 +99,10 @@ func GetLessons(ctx context.Context, c *app.RequestContext) {
 	}
 
 	if err == nil {
-		println("Redis hit schedule")
 		c.Data(200, "application/json", val)
 		return
 	}
 
-	println("Redis miss")
 	query := db.DB.Preload("Group").Preload("Institution").Model(&models.Lesson{})
 
 	if institutionID != 0 {

@@ -2,7 +2,7 @@ package handler
 
 import (
 	"brainz-api/internal/db"
-	"brainz-api/internal/models"
+	models "brainz-api/internal/models/db_models"
 	"brainz-api/internal/models/mappers"
 	"brainz-api/internal/models/requests"
 	"context"

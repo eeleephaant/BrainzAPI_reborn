@@ -2,7 +2,7 @@ package handler
 
 import (
 	"brainz-api/internal/db"
-	"brainz-api/internal/models"
+	models "brainz-api/internal/models/db_models"
 	"brainz-api/internal/models/mappers"
 	"context"
 
@@ -30,5 +30,4 @@ func GetGroups(ctx context.Context, c *app.RequestContext) {
 	groupsDto := mappers.GroupsToDTOs(groups)
 
 	c.JSON(200, groupsDto)
-
 }

@@ -3,7 +3,7 @@ package main
 import (
 	"brainz-api/internal/db"
 	"brainz-api/internal/middleware"
-	"brainz-api/internal/models"
+	models "brainz-api/internal/models/db_models"
 	"brainz-api/internal/router"
 	"net/http"
 	"time"
@@ -20,6 +20,7 @@ func main() {
 	db.DB.FirstOrCreate(&models.Institution{}, models.Institution{Name: "ТТСИиГХ"}, models.Institution{Site: "http://tci72.ru"})
 
 	h := server.Default(server.WithHostPorts(":8080"))
+	h.NoHijackConnPool = true
 
 	h.Use(middleware.RecoveryMiddleware())
 	h.Use(limiter.AdaptiveLimit())
