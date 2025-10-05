@@ -109,7 +109,7 @@ class XLSXParser(AbstractScheduleParser):
         while row < sheet.max_row:
             group_name = sheet.cell(row=row, column=start_coords.y).value or "-"
 
-            for col in range(start_coords.y + 1, sheet.max_column - 1):
+            for col in range(start_coords.y + 1, sheet.max_column):
                 pair_ordinal = (col - 1) - start_coords.y
                 pair_name = sheet.cell(row=row, column=col).value or "-"
                 pair_teacher = sheet.cell(row=row + 1, column=col).value or "-"
