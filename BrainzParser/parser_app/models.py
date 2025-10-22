@@ -39,20 +39,6 @@ class Lesson:
                 f"institution_id={self.institution_id}, start_time={self.start_time}, "
                 f"end_time={self.end_time})")
 
-    def get_group_id(self, name: str, institution_id: int):
-        with psycopg2.connect(
-                dsn=utils.DSN
-        ) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT id FROM groups WHERE name = %s AND institution_id = %s",
-                (name.lower(), institution_id)
-            )
-            group_id = cursor.fetchone()
-            if group_id is not None:
-                return group_id[0]
-            return None
-
     def __init__(self, lesson_timings, date: datetime, group: str, lesson_num: int = 0,
                  cab_num: str = "-", teacher: str = "-", name: str = '',
                  institution_id: int = 1):
@@ -74,31 +60,6 @@ class Lesson:
         self.cab_num = cab_num
         self.institution_id = institution_id
         self.institution_group_id = self.get_group_id(group, institution_id)
-
-    def write_to_bd(self):
-        with psycopg2.connect(
-                dsn=utils.DSN
-        ) as conn:
-            cursor = conn.cursor()
-
-            cursor.execute(
-                """
-                SELECT id FROM lessons 
-                WHERE start_time = %s AND group_id = %s AND num = %s 
-                AND name = %s AND teacher_name = %s
-                """,
-                (self.start_time, self.institution_group_id, self.lesson_num, self.name, self.teacher)
-            )
-            result = cursor.fetchone()
-            if result is None:
-                cursor.execute(
-                    "INSERT INTO lessons (start_time, end_time, num, name, teacher_name, cab_num, group_id, institution_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                    (self.start_time, self.end_time, self.lesson_num, self.name, self.teacher,
-                     self.cab_num,
-                     self.institution_group_id,
-                     self.institution_id
-                     ))
-                conn.commit()
 
 
 class AbstractScheduleParser(ABC):
