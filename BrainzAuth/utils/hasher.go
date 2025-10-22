@@ -1,11 +1,13 @@
 package utils
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"os"
+
+	"golang.org/x/crypto/argon2"
 )
 
-func HashKey(key string) string {
-	hash := sha256.Sum256([]byte(key))
-	return hex.EncodeToString(hash[:])
+func GetHashArgon2(apiKey string, salt []byte) []byte {
+	pepper := os.Getenv("API_KEY_PEPPER")
+	hash := argon2.Key([]byte(apiKey+pepper), salt, 3, 32*1024, 4, 64)
+	return hash
 }

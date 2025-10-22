@@ -1,39 +1,33 @@
 import json
+import logging
 import re
-from datetime import datetime
+import datetime
 from typing import IO, Union
 from io import BytesIO
 
-import psycopg2
-import openpyxl
+import psycopg2  # type: ignore
+import openpyxl  # type: ignore
+from openpyxl.workbook.workbook import Workbook  # type: ignore
 
-import utils
-from dataclassesa import Lesson, LessonTimings, AbstractScheduleParser
+import utils  # type: ignore
+from models import Lesson, LessonTimings, AbstractScheduleParser  # type: ignore
+from parser_app import database
 
 local_timings = LessonTimings.from_json("./parser_app/data/ttsiigh/lesson_timings.json")
 institution_id = 1
 
-
-def save_file_names(names):
-    with open("used_rsps.txt", 'w') as file:
-        json.dump(names, file)
-
-
-def get_old_file_names():
-    with open("used_rsps.txt", 'r') as file:
-        return json.load(file)
+log = logging.getLogger("parser_app")
 
 
 class XLSXParser(AbstractScheduleParser):
-    def __init__(self, file: IO[bytes]):
+    def __init__(self, file: IO[bytes] | str):
         super().__init__(file)
         if isinstance(file, bytes):
-            self.book = openpyxl.load_workbook(filename=BytesIO(file))
+            self.book: Workbook = openpyxl.load_workbook(filename=BytesIO(file))
         else:
-            # Если передали путь к файлу
-            self.book = openpyxl.load_workbook(filename=file)
+            self.book: Workbook = openpyxl.load_workbook(filename=file)  # type: ignore
 
-    def extract_date(self) -> datetime:
+    def extract_date(self) -> datetime.date:
         months = {
             "Январь": "01",
             "Февраль": "02",
@@ -55,29 +49,35 @@ class XLSXParser(AbstractScheduleParser):
         reg = r'(\d{1,2})\s([а-яёА-ЯЁ]+)\s(\d{4})'
         match = re.search(reg, date_string)
 
+        if not match:
+            raise Exception(f"Extracting date failed. Date string [{date_string}] does not match expected pattern")
+
         day = match.group(1)
         month_name = match.group(2)
         year = match.group(3)
         month = months.get(month_name)
         if month:
             formatted_date = f"{day.zfill(2)}.{month}.{year}"
-            date_obj = datetime.strptime(formatted_date, "%d.%m.%Y")
+            date_obj = datetime.datetime.strptime(formatted_date, "%d.%m.%Y").date()
             return date_obj
-        return None
+        else:
+            raise Exception(f"Invalid month name: {month_name}")
 
     def __get_group_coord(self) -> utils.Vector2:
+        if len(self.book.worksheets) < 1:
+            raise Exception("No worksheets found in schedule :(")
+
         for sheet in self.book.worksheets:
             for row in sheet.iter_rows():
                 for cell in row:
                     text = cell.value
-                    if text and "Группа" in text:
+                    if text and "Группа" in str(text):
                         return utils.Vector2(cell.row, cell.column)
-        return None
+
+        raise Exception("It seems like there are no 'Группа' cells in schedule...")
 
     def extract_groups(self) -> list[str]:
         start_coords = self.__get_group_coord()
-        if not start_coords:
-            raise ValueError("Group coordinates not found")
 
         groups = []
         for sheet in self.book.worksheets:
@@ -90,18 +90,12 @@ class XLSXParser(AbstractScheduleParser):
 
         return groups
 
-    def print_table_preview(self):
-        sheet = self.book.worksheets[0]
-        for row in sheet.iter_rows():
-            row_values = []
-            for cell in row:
-                row_values.append(str(cell.value))
-            print(" | ".join(row_values))
-
     def extract_lessons(self, lesson_timings: LessonTimings) -> list[Lesson]:
         start_coords = self.__get_group_coord()
-        if not start_coords:
-            raise ValueError("Group coordinates not found")
+
+        ROW_TEACHER_OFFSET = 1
+        ROW_CABINET_OFFSET = 2
+        ROW_STEP = 3
 
         sheet = self.book.worksheets[0]
         lessons = []
@@ -112,8 +106,8 @@ class XLSXParser(AbstractScheduleParser):
             for col in range(start_coords.y + 1, sheet.max_column):
                 pair_ordinal = (col - 1) - start_coords.y
                 pair_name = sheet.cell(row=row, column=col).value or "-"
-                pair_teacher = sheet.cell(row=row + 1, column=col).value or "-"
-                pair_cab_num = sheet.cell(row=row + 2, column=col).value or "-"
+                pair_teacher = sheet.cell(row=row + ROW_TEACHER_OFFSET, column=col).value or "-"
+                pair_cab_num = sheet.cell(row=row + ROW_CABINET_OFFSET, column=col).value or "-"
                 pair_cab_num = pair_cab_num if pair_cab_num != "" else "-"
 
                 if pair_name != "-" and pair_name != "Н/Б":
@@ -128,8 +122,9 @@ class XLSXParser(AbstractScheduleParser):
                         group=group_name
                     ))
 
-            row += 3
+            row += ROW_STEP
         return lessons
+
 
 def get_group_id_by_name(name: str) -> Union[int, None]:
     with psycopg2.connect(
@@ -142,6 +137,7 @@ def get_group_id_by_name(name: str) -> Union[int, None]:
         group_id = cursor.fetchone()[0]
         return group_id
 
+
 def add_schedule_from_xlsx(file: IO[bytes]) -> bool:
     parser = XLSXParser(file)
     groups = parser.extract_groups()
@@ -153,13 +149,13 @@ def add_schedule_from_xlsx(file: IO[bytes]) -> bool:
     add_groups(groups)
     lessons = parser.extract_lessons(local_timings)
 
-    for lesson in lessons:
-        lesson.write_to_bd()
+    database.write_lessons_to_bd(lessons)
 
     channel = "info_stream:1"
     message = {"type": "new schedule", "date": raw_date.strftime("%Y-%m-%d")}
     utils.redis_client.publish(channel, json.dumps(message))
     return True
+
 
 def add_groups(groups_list: list[str]):
     with psycopg2.connect(
@@ -176,9 +172,8 @@ def add_groups(groups_list: list[str]):
                 )
                 conn.commit()
 
-def schedule_exists(target_date: datetime) -> bool:
-    date_only = target_date.date()
 
+def schedule_exists(target_date: datetime.date) -> bool:
     query = """
         SELECT 1
         FROM lessons
@@ -189,6 +184,6 @@ def schedule_exists(target_date: datetime) -> bool:
             dsn=utils.DSN
     ) as conn:
         cur = conn.cursor()
-        cur.execute(query, (date_only, date_only))
+        cur.execute(query, (target_date, target_date))
         exists = cur.fetchone() is not None
         return exists

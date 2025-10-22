@@ -32,6 +32,7 @@ require (
 
 require (
 	github.com/cloudwego/hertz v0.10.2
+	github.com/gofrs/uuid/v5 v5.3.2
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	golang.org/x/text v0.21.0 // indirect

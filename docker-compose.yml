@@ -1,12 +1,12 @@
 services:
   brainz-api:
     build: ./BrainzAPI
-    ports:
-      - "8080:8080"
     depends_on:
       - db
       - redis
       - brainz-auth
+    ports:
+      - '8080:8080'
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -18,7 +18,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     networks:
       - appnet
-  
+
   brainz-auth:
     build: ./BrainzAuth
     depends_on:
@@ -29,28 +29,30 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_AUTH_NAME}
+      API_KEY_PEPPER: ${API_KEY_PEPPER}
     networks:
       - appnet
-    
-    brainz-developers:
-      build: ./BrainzDevelopersAPI
-      depends_on:
-        - db
-      environment:
-        DB_HOST: ${DB_HOST}
-        DB_PORT: ${DB_PORT}
-        DB_USER: ${DB_USER}
-        DB_PASSWORD: ${DB_PASSWORD}
-        DB_NAME: ${DB_DEVS_NAME}
-      networks:
-        - appnet
+
+  brainz-developers:
+    build: ./BrainzDevelopersAPI
+    depends_on:
+      - db
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DEVS_NAME: ${DB_DEVS_NAME}
+      DB_AUTH_NAME: ${DB_DEVS_NAME}
+    networks:
+      - appnet
 
   brainz-parser:
     build: ./BrainzParser
-    ports:
-      - "4444:80"
     depends_on:
       - db
+    ports:
+      - '4444:80'
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -64,34 +66,67 @@ services:
 
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d
     networks:
       - appnet
-  
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${DB_USER} -d ${DB_LESSON_NAME} && pg_isready -U ${DB_USER} -d ${DB_DEVS_NAME}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   redis:
     image: redis:8.2.1-alpine
-    command: >
-      redis-server
-      --maxmemory 500mb
-      --maxmemory-policy allkeys-lru
-      --appendonly no
+    networks:
+      - appnet
+    command: |
+      redis-server --maxmemory 500mb --maxmemory-policy allkeys-lru --appendonly no
     deploy:
       resources:
         limits:
           memory: 500m
-          cpus: "0.5"
-    networks:
-      - appnet
+          cpus: '0.5'
+
+  loki:
+    container_name: loki
+    image: grafana/loki:latest
+    ports:
+      - '3100:3100'
+    command: '-config.file=/etc/loki/local-config.yaml'
+
+  promtail:
+    container_name: promtail
+    image: grafana/promtail:latest
+    restart: always
+    depends_on:
+      - loki
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail:/etc/promtail
+    command: '-config.file=/etc/promtail/config.yml'
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:latest
+    restart: always
+    depends_on:
+      - loki
+    ports:
+      - '3000:3000'
 
 volumes:
-  postgres_data:
-  redis_data:
+  postgres_data: null
+  redis_data: null
 
 networks:
   appnet:

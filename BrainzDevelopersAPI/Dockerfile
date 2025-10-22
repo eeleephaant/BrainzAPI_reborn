@@ -8,8 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main .
-
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main ./cmd
 # Final stage
 FROM alpine:latest
 

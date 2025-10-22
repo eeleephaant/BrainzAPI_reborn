@@ -1,10 +1,6 @@
 import json
 from abc import ABC, abstractmethod
-
-import psycopg2
 from datetime import datetime, time
-
-from parser_app import utils
 
 
 class LessonTimings:
@@ -35,8 +31,7 @@ class Lesson:
 
     def __repr__(self):
         return (f"Lesson(date={self.date}, group={self.group}, lesson_num={self.lesson_num}, "
-                f"cab_num={self.cab_num}, teacher={self.teacher}, name={self.name}, "
-                f"institution_id={self.institution_id}, start_time={self.start_time}, "
+                f"cab_num={self.cab_num}, teacher={self.teacher}, name={self.name}, start_time={self.start_time}, "
                 f"end_time={self.end_time})")
 
     def __init__(self, lesson_timings, date: datetime, group: str, lesson_num: int = 0,
@@ -59,7 +54,6 @@ class Lesson:
         self.teacher = teacher
         self.cab_num = cab_num
         self.institution_id = institution_id
-        self.institution_group_id = self.get_group_id(group, institution_id)
 
 
 class AbstractScheduleParser(ABC):

@@ -3,20 +3,19 @@ import logging
 import time
 
 from bs4 import BeautifulSoup
-import requests
+import requests  # type: ignore
 
+from parser_app.logging_config import configure_logging
 from parser_app.ttsiigh_utils import add_schedule_from_xlsx
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+configure_logging()
+log = logging.getLogger("parser_app")
 
 last_hashes: set[str] = set()
 MAX_HASHES = 10
 
 
-def get_download_link() -> str:
+def get_download_link() -> str | None:
     try:
         site = requests.get("https://tci72.ru/students/schedule/").text
         soup = BeautifulSoup(site, "html.parser")
@@ -24,13 +23,13 @@ def get_download_link() -> str:
         link = link_element.get("href")
         full_link = "https://tci72.ru" + link
         return full_link
-    except Exception as ex:
-        logging.error(f"Failed to parse download link: {ex}")
-        return ""
+    except Exception:
+        log.error(f"Failed to parse download link", exc_info=True)
+        return None
 
 
 def start_listing():
-    logging.info("Worker started, monitoring schedule updates...")
+    log.info("Worker started, monitoring schedule updates from https://tci72.ru...")
     while True:
         try:
             if len(last_hashes) > MAX_HASHES:
@@ -38,33 +37,33 @@ def start_listing():
 
             link = get_download_link()
             if not link:
+                log.error("Failed to find download link on the website https://tci72.ru...")
                 time.sleep(60)
                 continue
 
             response = requests.get(link)
             if response.status_code != 200:
-                logging.warning(f"Failed to download file. Status code: {response.status_code}")
+                log.error(f"Failed to download file. Status code: {response.status_code}")
                 time.sleep(60)
                 continue
 
             hash_md5 = hashlib.md5(response.content).hexdigest()
             if hash_md5 in last_hashes:
-                logging.info("No new schedule found.")
                 time.sleep(60)
                 continue
 
             try:
                 result = add_schedule_from_xlsx(response.content)
                 if result:
-                    logging.info(f"[V] New schedule added successfully: {link}")
+                    log.info(f"New schedule added successfully: {link}")
                 else:
-                    logging.info(f"[X] Schedule from site is not added: {link}")
-            except Exception as ex:
-                logging.error(f"Error processing schedule: {ex}")
+                    log.info(f"Schedule from site is not added: {link}")
+            except Exception:
+                log.error(f"Error when processing given schedule {link}.", exc_info=True)
             last_hashes.add(hash_md5)
 
-        except Exception as ex:
-            logging.error(f"Unexpected error in worker loop: {ex}")
+        except Exception:
+            log.error(f"Unexpected error in worker loop", exc_info=True)
 
         time.sleep(60)
 
