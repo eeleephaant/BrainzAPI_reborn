@@ -125,8 +125,8 @@ services:
       - '3000:3000'
 
 volumes:
-  postgres_data: null
-  redis_data: null
+  postgres_data:
+  redis_data:
 
 networks:
   appnet:

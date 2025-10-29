@@ -1,8 +1,8 @@
-__pycache__
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.git
-venv
-.venv
-.zencoder
+venv/
+.venv/
+.zencoder/
