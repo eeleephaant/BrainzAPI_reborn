@@ -1,6 +1,6 @@
 services:
   brainz-api:
-    build: ./BrainzAPI
+    build: ./BrainzSchedules
     depends_on:
       - db
       - redis
@@ -30,13 +30,19 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_AUTH_NAME}
       API_KEY_PEPPER: ${API_KEY_PEPPER}
+      PEPPER: ${DEVELOPER_CREDS_PEPPER}
+      ARGON2_MEMORY: ${ARGON2_MEMORY}
+      ARGON2_TIME: ${ARGON2_TIME}
+      ARGON2_THREADS: ${ARGON2_THREADS}
     networks:
       - appnet
 
   brainz-developers:
-    build: ./BrainzDevelopersAPI
+    build: ./BrainzDevelopers
     depends_on:
       - db
+    ports:
+      - '3333:8080'
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -44,6 +50,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_DEVS_NAME: ${DB_DEVS_NAME}
       DB_AUTH_NAME: ${DB_DEVS_NAME}
+      DB_POOL_MAX: ${DB_POOL_MAX}
+      ARGON2_MEMORY: ${ARGON2_MEMORY}
+      ARGON2_THREADS: ${ARGON2_THREADS}
+      ARGON2_TIME: ${ARGON2_TIME}
     networks:
       - appnet
 

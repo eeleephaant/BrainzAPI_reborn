@@ -4,9 +4,6 @@ CREATE DATABASE brainz_lessons;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE SCHEMA IF NOT EXISTS brainz_lessons;
-SET search_path TO brainz_lessons;
-
 CREATE TABLE IF NOT EXISTS institutions (
 	id              SERIAL PRIMARY KEY,
 	created_at      TIMESTAMPTZ DEFAULT NOW(),

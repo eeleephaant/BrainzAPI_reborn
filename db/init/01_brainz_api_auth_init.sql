@@ -4,9 +4,6 @@ CREATE DATABASE brainz_auth;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE SCHEMA IF NOT EXISTS brainz_auth;
-SET search_path TO brainz_auth;
-
 CREATE TABLE api_key (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     expire_at     TIMESTAMPTZ NOT NULL,
@@ -40,7 +37,7 @@ CREATE TABLE api_key_usage (
 CREATE TABLE api_key_institution_permission (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     api_key_id UUID NOT NULL REFERENCES api_key(id) ON DELETE CASCADE,
-    institution_id INTEGER NOT NULL,
+    institution_id INTEGER NOT NULL, -- ID из микросервиса lessons
     permission_id INTEGER NOT NULL REFERENCES api_key_permission(id) ON DELETE RESTRICT,
     granted_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT api_key_institution_perm_unique UNIQUE (api_key_id, institution_id, permission_id)
