@@ -8,8 +8,9 @@ import (
 
 func Register(h *server.Hertz) {
 	h.POST("/register", handler.Register)
-	h.POST("/login", nil)
+	h.POST("/login", handler.Login)
 	h.GET("/key", nil)
 	h.GET("/keys", nil)
 	h.DELETE("/key", nil)
+
 }

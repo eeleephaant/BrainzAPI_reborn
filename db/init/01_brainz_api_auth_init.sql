@@ -12,6 +12,11 @@ CREATE TABLE api_key (
     key_hash      TEXT NOT NULL
 );
 
+CREATE TABLE api_key_permission (
+    id     SERIAL PRIMARY KEY,
+    title  TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE api_keys_and_permissions (
     id                     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     api_key_id             UUID NOT NULL REFERENCES api_key(id) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -43,10 +48,7 @@ CREATE TABLE api_key_institution_permission (
     CONSTRAINT api_key_institution_perm_unique UNIQUE (api_key_id, institution_id, permission_id)
 );
 
-CREATE TABLE api_key_permission (
-    id     SERIAL PRIMARY KEY,
-    title  TEXT NOT NULL UNIQUE
-);
+
 
 CREATE TABLE api_key_global_permission (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

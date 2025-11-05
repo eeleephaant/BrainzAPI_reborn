@@ -4,7 +4,13 @@ import (
 	"brainz/developersapi/internal/app"
 	"brainz/developersapi/internal/config"
 	"context"
+
+	"go.uber.org/zap"
 )
+
+func init() {
+	zap.ReplaceGlobals(zap.Must(zap.NewProduction()))
+}
 
 func main() {
 	cfg := config.MustLoad()

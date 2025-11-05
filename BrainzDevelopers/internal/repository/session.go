@@ -1,4 +1,4 @@
-package services
+package repository
 
 import (
 	"brainz/developersapi/internal/models"
@@ -12,7 +12,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func GetNewSession(ctx context.Context, conn *pgxpool.Conn, request *models.SessionRequestData) ([]byte, error) {
+type SessionRepository struct {
+	db *pgxpool.Pool
+}
+
+func NewSessionRepository(db *pgxpool.Pool) *SessionRepository {
+	return &SessionRepository{db}
+}
+
+func (r *SessionRepository) GetNewSession(ctx context.Context, request *models.SessionRequestData) ([]byte, error) {
+	conn, err := r.db.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire connection: %w", err)
+	}
+	defer conn.Release()
 	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -29,7 +42,7 @@ func GetNewSession(ctx context.Context, conn *pgxpool.Conn, request *models.Sess
 	expiresAt := time.Now().Add(24 * 14 * time.Hour)
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO developer_session 
+		`INSERT INTO developer_session
 		(id, developer_id, user_agent, ip_address, token_hash, salt, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		sessionID, request.DeveloperId, request.UserAgent, request.IpAddress, secretKeyHash, salt, expiresAt)
@@ -41,7 +54,12 @@ func GetNewSession(ctx context.Context, conn *pgxpool.Conn, request *models.Sess
 	return []byte(outputKey), nil
 }
 
-func ValidateSessionKey(ctx context.Context, conn *pgxpool.Conn, authRequest *models.SessionAuthData) (bool, error) {
+func (r *SessionRepository) ValidateSessionKey(ctx context.Context, authRequest *models.SessionAuthData) (bool, error) {
+	conn, err := r.db.Acquire(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to acquire connection: %w", err)
+	}
+	defer conn.Release()
 	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to begin transaction")

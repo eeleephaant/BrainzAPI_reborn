@@ -6,12 +6,10 @@ import (
 	"brainz/developersapi/internal/security"
 	"brainz/developersapi/internal/storage/postgres"
 	"context"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"go.uber.org/zap"
 )
 
 func Run(ctx context.Context, log *logger.Logger, cfg *config.Config) error {
@@ -22,17 +20,13 @@ func Run(ctx context.Context, log *logger.Logger, cfg *config.Config) error {
 
 	router.Register(h)
 
-	go func() {
-		h.Spin()
-	}()
+	h.OnShutdown = append(h.OnShutdown, func(ctx context.Context) {
+		zap.L().Info("Stopping Server gracefully...")
+		postgres.Close()
+		<-ctx.Done()
+		zap.L().Info("Server Stopped gracefully")
+	})
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
-	<-stop
-	h.Shutdown(ctx)
-	postgres.Close()
-
-	// log.Info("Server Stopped")
-
+	h.Spin()
 	return nil
 }

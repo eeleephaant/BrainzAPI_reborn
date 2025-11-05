@@ -9,28 +9,43 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5"
+	"go.uber.org/zap"
 )
 
+type AuthHandler struct {
+	svc *services.
+}
+
 func Login(ctx context.Context, c *app.RequestContext) {
+	op := "handlers.Login"
 	loginData := dtos.LoginDto{}
 
 	if err := c.Bind(&loginData); err != nil {
-		c.String(400, err.Error())
+		c.JSON(400, map[string]string{"error": "invalid request"})
 		return
 	}
 
-	if err := loginData.Validate(); err != nil {
-		c.String(400, err.Error())
+	if errs, err := loginData.Validate(); err != nil {
+		c.JSON(400, map[string]any{
+			"message": "Validation failed",
+			"errors":  errs,
+		})
 		return
 	}
 
 	conn, err := postgres.DevsPool.Acquire(ctx)
 	if err != nil {
-		c.String(500, "internal error")
+		c.JSON(500, map[string]string{"error": "internal error"})
+		zap.L().Error(op,
+			zap.String("message", "error acquiring database connection"),
+			zap.String("details", err.Error()),
+		)
 		return
 	}
 	defer conn.Release()
@@ -39,24 +54,44 @@ func Login(ctx context.Context, c *app.RequestContext) {
 		accountPasswordHash []byte
 		twoFactorSecret     *string
 		userId              uuid.UUID
+		bannedAt            *time.Time
+		emailConfirmedAt    *time.Time
 	)
-
-	err = conn.QueryRow(ctx,
-		"SELECT id, salt, password_hash, two_factor_secret FROM developer_account WHERE email=$1", loginData.Email).Scan(&userId, &accountSalt, &accountPasswordHash, &twoFactorSecret)
-	if err != nil {
-		c.String(500, "internal error")
+	if err := conn.QueryRow(ctx,
+		"SELECT id, salt, password_hash, two_factor_secret, banned_at, email_confirmed_at FROM developer_account WHERE email=$1",
+		loginData.Email,
+	).Scan(&userId, &accountSalt, &accountPasswordHash, &twoFactorSecret, &bannedAt, &emailConfirmedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(401, map[string]string{"message": "invalid password or email"})
+			return
+		}
+		c.JSON(500, map[string]string{"error": "internal error"})
+		zap.L().Error(op,
+			zap.String("message", "error SELECT querying database"),
+			zap.String("details", err.Error()),
+		)
 		return
 	}
 
 	passwordHash := security.GetHashArgon2(loginData.Password, accountSalt)
 
 	if !bytes.Equal(passwordHash, accountPasswordHash) {
-		c.String(401, "invalid email or password")
+		c.JSON(401, map[string]string{"message": "invalid email or password"})
+		return
+	}
+
+	if emailConfirmedAt == nil {
+		c.JSON(401, map[string]string{"message": "need to confirm email"})
+		return
+	}
+
+	if bannedAt != nil {
+		c.JSON(401, map[string]string{"message": "whooops... your account is banned"})
 		return
 	}
 
 	if twoFactorSecret != nil {
-		c.String(200, "")
+		c.JSON(200, map[string]string{"message": "Need for 2fa"})
 		return
 	}
 
@@ -64,7 +99,11 @@ func Login(ctx context.Context, c *app.RequestContext) {
 
 	key, err := services.GetNewSession(ctx, conn, &requestData)
 	if err != nil {
-		c.String(500, "internal error")
+		c.JSON(500, map[string]string{"error": "internal error"})
+		zap.L().Error(op,
+			zap.String("message", "error while creating session"),
+			zap.String("details", err.Error()),
+		)
 		return
 	}
 	sessionKeyStr := hex.EncodeToString(key)
@@ -73,6 +112,7 @@ func Login(ctx context.Context, c *app.RequestContext) {
 }
 
 func Register(ctx context.Context, c *app.RequestContext) {
+	op := "handlers.Register"
 	registerData := dtos.RegisterDto{}
 
 	if err := c.Bind(&registerData); err != nil {
@@ -80,43 +120,18 @@ func Register(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if err := registerData.Validate(); err != nil {
-		c.String(400, err.Error())
+	if errs, err := registerData.Validate(); err != nil {
+		c.JSON(400, map[string]any{
+			"message": "validation failed",
+			"errors":  errs,
+		})
 		return
 	}
 
-	salt := security.GetRandomSalt()
-	password_hash := security.GetHashArgon2(registerData.Password, salt)
+	zap.L().Error(op,
+		zap.String("message", "error acquiring database connection"),
+		zap.String("details", err.Error()),
+	)
 
-	conn, err := postgres.DevsPool.Acquire(ctx)
-	if err != nil {
-		c.String(500, "internal error")
-		return
-	}
-	defer conn.Release()
-
-	tx, err := conn.Begin(ctx)
-	if err != nil {
-		c.String(500, "internal error")
-		return
-	}
-	defer tx.Rollback(ctx)
-	_, err = tx.Exec(ctx,
-		`INSERT INTO "users" (email, password_hash, created_at, role_id, salt) 
-		VALUES ($1, $2, now(), $3, $4)`, registerData.Email, password_hash, 0, salt)
-
-	if err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { // SQLSTATE code: unique_violation (email)
-			c.String(409, "email already registered")
-			return
-		}
-		c.String(500, "internal error")
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		c.String(500, "internal error")
-		return
-	}
-	c.String(201, "user created")
+	c.JSON(201, map[string]string{"message": "user created"})
 }

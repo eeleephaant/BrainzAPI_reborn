@@ -7,7 +7,6 @@ CREATE TABLE
     role (id SERIAL PRIMARY KEY, title TEXT NOT NULL UNIQUE);
 
 
-
 CREATE TABLE
     developer_account (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
@@ -15,11 +14,21 @@ CREATE TABLE
         email_confirmed_at TIMESTAMPTZ DEFAULT NULL,
         password_hash BYTEA NOT NULL,
         salt BYTEA NOT NULL,
-        two_factor_secret TEXT DEFAULT NULL,
+        two_factor_secret BYTEA DEFAULT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         banned_at TIMESTAMPTZ DEFAULT NULL,
         role_id INTEGER REFERENCES role (id) ON UPDATE CASCADE ON DELETE RESTRICT
     );
+
+
+CREATE TABLE email_confirmation_token (
+	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+	developer_id UUID NOT NULL REFERENCES developer_account (id) ON DELETE CASCADE,
+	token TEXT NOT NULL UNIQUE,
+	expires_at TIMESTAMPTZ NOT NULL,
+	used_at TIMESTAMPTZ DEFAULT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE
     developer_session (

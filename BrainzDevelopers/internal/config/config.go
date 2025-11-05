@@ -9,6 +9,13 @@ type (
 		Postgres PostgresConfig `env-prefix:"DB_"`
 		Auth     AuthConfig
 		Redis    RedisConfig `env-prefix:"REDIS_"`
+		App      AppConfig   `env-prefix:"APP_"`
+	}
+
+	AppConfig struct {
+		Address     string `env:"ADDRESS, required"`
+		Port        int    `env:"PORT, required"`
+		Environment string `env:"ENV"`
 	}
 
 	AuthConfig struct {

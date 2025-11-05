@@ -16,6 +16,9 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      APP_PORT: 8000
+      APP_ADDRESS: localhost
+      APP_ENV: development
     networks:
       - appnet
 
@@ -48,8 +51,7 @@ services:
       DB_PORT: ${DB_PORT}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_DEVS_NAME: ${DB_DEVS_NAME}
-      DB_AUTH_NAME: ${DB_DEVS_NAME}
+      DB_NAME: ${DB_DEVS_NAME}
       DB_POOL_MAX: ${DB_POOL_MAX}
       ARGON2_MEMORY: ${ARGON2_MEMORY}
       ARGON2_THREADS: ${ARGON2_THREADS}
