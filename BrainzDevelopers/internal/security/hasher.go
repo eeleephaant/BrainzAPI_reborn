@@ -3,6 +3,7 @@ package security
 import (
 	"brainz/developersapi/internal/config"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 
@@ -13,6 +14,11 @@ var cfg *config.AuthConfig
 
 func LoadCfg(c *config.AuthConfig) {
 	cfg = c
+}
+
+func CheckPassword(rawPassword string, salt, hashedPassword []byte) bool {
+	hashedUserInput := GetHashArgon2(rawPassword, salt)
+	return subtle.ConstantTimeCompare(hashedUserInput, hashedPassword) == 1
 }
 
 func GetRandomSalt() []byte {

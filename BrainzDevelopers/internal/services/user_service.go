@@ -1,8 +1,11 @@
 package services
 
 import (
+	"brainz/developersapi/internal/dtos"
 	"brainz/developersapi/internal/entity"
 	"brainz/developersapi/internal/repository"
+	"brainz/developersapi/internal/security"
+	"context"
 )
 
 type UserService struct {
@@ -13,15 +16,33 @@ func NewUserService(ur *repository.UserRepository) *UserService {
 	return &UserService{ur: ur}
 }
 
-func (us *UserService) GetUserByEmail(ctx context.Context, email string) (entity.DeveloperAccount, error) {
-	op := "UserService.GetUserByEmail"
-	err, user := us.ur.GetByEmail(ctx context.Context, email string); if err != nil {
-		zap.L().Error(op,
-			zap.String("message", "error acquiring database connection"),
-			zap.String("details", err.Error()),
-		)
+func (us *UserService) Authenticate(ctx context.Context, email string, password string) (*entity.DeveloperAccount, error) {
+	account, err := us.ur.GetByEmail(ctx, email)
+	if err != nil {
 		return nil, err
-	} else {
-		return user.Email, nil
 	}
+
+	if !security.CheckPassword(password, account.Salt, account.PasswordHash) {
+		return nil, entity.ErrWrongCredentials
+	}
+
+	if account.BannedAt != nil {
+		return nil, entity.ErrUserBanned
+	}
+
+	return account, nil
+}
+
+func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.RegisterDto) (*entity.DeveloperAccount, error) {
+	salt := security.GetRandomSalt()
+	passwordHash := security.GetHashArgon2(registerDto.Password, salt)
+
+	var user = entity.DeveloperAccount{
+		Email:        registerDto.Email,
+		PasswordHash: passwordHash,
+		Salt:         salt,
+		RoleId:       0,
+	}
+
+	return us.ur.Create(ctx, &user)
 }

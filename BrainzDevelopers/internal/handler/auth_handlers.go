@@ -2,27 +2,21 @@ package handler
 
 import (
 	"brainz/developersapi/internal/dtos"
-	"brainz/developersapi/internal/models"
-	"brainz/developersapi/internal/security"
+	"brainz/developersapi/internal/entity"
 	"brainz/developersapi/internal/services"
-	"brainz/developersapi/internal/storage/postgres"
-	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
-	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
 
 type AuthHandler struct {
-	svc *services.
+	us *services.UserService
+	ss *services.SessionService
 }
 
-func Login(ctx context.Context, c *app.RequestContext) {
+func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 	op := "handlers.Login"
 	loginData := dtos.LoginDto{}
 
@@ -33,85 +27,39 @@ func Login(ctx context.Context, c *app.RequestContext) {
 
 	if errs, err := loginData.Validate(); err != nil {
 		c.JSON(400, map[string]any{
-			"message": "Validation failed",
+			"message": "validation failed",
 			"errors":  errs,
 		})
 		return
 	}
 
-	conn, err := postgres.DevsPool.Acquire(ctx)
+	account, err := h.us.Authenticate(ctx, loginData.Email, loginData.Password)
 	if err != nil {
-		c.JSON(500, map[string]string{"error": "internal error"})
-		zap.L().Error(op,
-			zap.String("message", "error acquiring database connection"),
-			zap.String("details", err.Error()),
-		)
-		return
-	}
-	defer conn.Release()
-	var (
-		accountSalt         []byte
-		accountPasswordHash []byte
-		twoFactorSecret     *string
-		userId              uuid.UUID
-		bannedAt            *time.Time
-		emailConfirmedAt    *time.Time
-	)
-	if err := conn.QueryRow(ctx,
-		"SELECT id, salt, password_hash, two_factor_secret, banned_at, email_confirmed_at FROM developer_account WHERE email=$1",
-		loginData.Email,
-	).Scan(&userId, &accountSalt, &accountPasswordHash, &twoFactorSecret, &bannedAt, &emailConfirmedAt); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(401, map[string]string{"message": "invalid password or email"})
-			return
+		switch {
+		case errors.Is(err, entity.ErrWrongCredentials):
+			c.JSON(401, map[string]string{"error": "wrong credentials"})
+		case errors.Is(err, entity.ErrUserBanned):
+			c.JSON(403, map[string]string{"error": "user banned"})
+		case errors.Is(err, entity.ErrNeed2FA):
+			c.JSON(401, map[string]string{"error": "2FA required"})
+		default:
+			c.JSON(500, map[string]string{"error": "internal server error"})
+			zap.L().Error(op,
+				zap.String("details", err.Error()),
+			)
 		}
-		c.JSON(500, map[string]string{"error": "internal error"})
-		zap.L().Error(op,
-			zap.String("message", "error SELECT querying database"),
-			zap.String("details", err.Error()),
-		)
 		return
 	}
 
-	passwordHash := security.GetHashArgon2(loginData.Password, accountSalt)
-
-	if !bytes.Equal(passwordHash, accountPasswordHash) {
-		c.JSON(401, map[string]string{"message": "invalid email or password"})
-		return
-	}
-
-	if emailConfirmedAt == nil {
-		c.JSON(401, map[string]string{"message": "need to confirm email"})
-		return
-	}
-
-	if bannedAt != nil {
-		c.JSON(401, map[string]string{"message": "whooops... your account is banned"})
-		return
-	}
-
-	if twoFactorSecret != nil {
-		c.JSON(200, map[string]string{"message": "Need for 2fa"})
-		return
-	}
-
-	requestData := models.SessionRequestData{IpAddress: c.ClientIP(), UserAgent: string(c.UserAgent()), DeveloperId: userId}
-
-	key, err := services.GetNewSession(ctx, conn, &requestData)
+	_, token, err := h.ss.CreateNew(ctx, account, string(c.UserAgent()), c.ClientIP())
 	if err != nil {
-		c.JSON(500, map[string]string{"error": "internal error"})
-		zap.L().Error(op,
-			zap.String("message", "error while creating session"),
-			zap.String("details", err.Error()),
-		)
-		return
+		c.JSON(500, map[string]string{"error": "internal server error"})
 	}
-	sessionKeyStr := hex.EncodeToString(key)
 
-	c.JSON(200, map[string]string{"session_key": sessionKeyStr})
+	c.JSON(200, map[string]string{"token": *token})
 }
 
-func Register(ctx context.Context, c *app.RequestContext) {
+func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 	op := "handlers.Register"
 	registerData := dtos.RegisterDto{}
 
@@ -128,10 +76,19 @@ func Register(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	zap.L().Error(op,
-		zap.String("message", "error acquiring database connection"),
-		zap.String("details", err.Error()),
-	)
+	_, err := h.us.RegistrateUser(ctx, &registerData)
+	if err != nil {
+		switch {
+		case errors.Is(err, entity.ErrEmailAlreadyExists):
+			c.JSON(409, map[string]string{"error": "email already exists"})
+		default:
+			c.JSON(500, map[string]string{"error": "internal server error"})
+			zap.L().Error(op,
+				zap.String("details", err.Error()),
+			)
+			return
+		}
+	}
 
 	c.JSON(201, map[string]string{"message": "user created"})
 }
