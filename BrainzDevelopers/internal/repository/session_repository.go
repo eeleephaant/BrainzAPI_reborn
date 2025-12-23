@@ -22,10 +22,8 @@ func NewSessionRepository(db *pgxpool.Pool) *SessionRepository {
 }
 
 func (r *SessionRepository) CreateSession(
-	ctx context.Context,
-	s *entity.Session,
+	ctx context.Context, s *entity.Session,
 ) (*entity.Session, error) {
-
 	conn, err := r.db.Acquire(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("session repository: acquire: %w", err)

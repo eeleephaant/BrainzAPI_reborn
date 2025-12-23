@@ -25,6 +25,7 @@ CREATE TABLE email_confirmation_token (
 	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 	developer_id UUID NOT NULL REFERENCES developer_account (id) ON DELETE CASCADE,
 	token TEXT NOT NULL UNIQUE,
+    numberic_code TEXT NOT NULL,
 	expires_at TIMESTAMPTZ NOT NULL,
 	used_at TIMESTAMPTZ DEFAULT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT now()

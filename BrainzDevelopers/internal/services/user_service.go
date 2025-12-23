@@ -9,7 +9,8 @@ import (
 )
 
 type UserService struct {
-	ur *repository.UserRepository
+	ur  *repository.UserRepository
+	ecs *EmailService
 }
 
 func NewUserService(ur *repository.UserRepository) *UserService {
@@ -33,7 +34,7 @@ func (us *UserService) Authenticate(ctx context.Context, email string, password 
 	return account, nil
 }
 
-func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.RegisterDto) (*entity.DeveloperAccount, error) {
+func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.RegisterDto) (*entity.EmailConfirmationToken, error) {
 	salt := security.GetRandomSalt()
 	passwordHash := security.GetHashArgon2(registerDto.Password, salt)
 
@@ -44,5 +45,16 @@ func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.Reg
 		RoleId:       0,
 	}
 
-	return us.ur.Create(ctx, &user)
+	acc, err := us.ur.Create(ctx, &user)
+	if err != nil {
+		return nil, err
+	}
+
+	err, ect := us.ecs.SendConfirmationEmail(ctx, acc.ID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ect, nil
 }

@@ -12,8 +12,8 @@ import (
 )
 
 type AuthHandler struct {
-	us *services.UserService
-	ss *services.SessionService
+	Us *services.UserService
+	Ss *services.SessionService
 }
 
 func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
@@ -27,19 +27,19 @@ func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 
 	if errs, err := loginData.Validate(); err != nil {
 		c.JSON(400, map[string]any{
-			"message": "validation failed",
+			"meSsage": "validation failed",
 			"errors":  errs,
 		})
 		return
 	}
 
-	account, err := h.us.Authenticate(ctx, loginData.Email, loginData.Password)
+	account, err := h.Us.Authenticate(ctx, loginData.Email, loginData.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, entity.ErrWrongCredentials):
 			c.JSON(401, map[string]string{"error": "wrong credentials"})
 		case errors.Is(err, entity.ErrUserBanned):
-			c.JSON(403, map[string]string{"error": "user banned"})
+			c.JSON(403, map[string]string{"error": "User banned"})
 		case errors.Is(err, entity.ErrNeed2FA):
 			c.JSON(401, map[string]string{"error": "2FA required"})
 		default:
@@ -51,7 +51,7 @@ func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	_, token, err := h.ss.CreateNew(ctx, account, string(c.UserAgent()), c.ClientIP())
+	_, token, err := h.Ss.CreateNew(ctx, account, string(c.UserAgent()), c.ClientIP())
 	if err != nil {
 		c.JSON(500, map[string]string{"error": "internal server error"})
 	}
@@ -76,7 +76,7 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	_, err := h.us.RegistrateUser(ctx, &registerData)
+	_, err := h.Us.RegistrateUser(ctx, &registerData)
 	if err != nil {
 		switch {
 		case errors.Is(err, entity.ErrEmailAlreadyExists):
@@ -90,5 +90,5 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 
-	c.JSON(201, map[string]string{"message": "user created"})
+	c.JSON(201, map[string]string{"meSsage": "User created"})
 }

@@ -35,6 +35,22 @@ func GetHashArgon2(apiKey string, salt []byte) []byte {
 	return hash
 }
 
+func GenerateRandomNumericCode(length int) (string, error) {
+	const digits = "0123456789"
+	bytes := make([]byte, length)
+
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+
+	for i := 0; i < length; i++ {
+		bytes[i] = digits[bytes[i]%10]
+	}
+
+	return string(bytes), nil
+}
+
 func GenerateSecretKey(length int) (string, error) {
 	key := make([]byte, length)
 	_, err := rand.Read(key)
