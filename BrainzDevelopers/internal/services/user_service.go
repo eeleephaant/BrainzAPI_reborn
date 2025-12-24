@@ -6,6 +6,9 @@ import (
 	"brainz/developersapi/internal/repository"
 	"brainz/developersapi/internal/security"
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type UserService struct {
@@ -31,7 +34,24 @@ func (us *UserService) Authenticate(ctx context.Context, email string, password 
 		return nil, entity.ErrUserBanned
 	}
 
+	if account.EmailConfirmedAt == nil {
+		return nil, entity.ErrEmailNotConfirmed
+	}
+
 	return account, nil
+}
+
+func (us *UserService) ConfirmEmail(ctx context.Context, devId uuid.UUID) error {
+	account, err := us.ur.GetById(ctx, devId)
+	if err != nil {
+		return err
+	}
+	*account.EmailConfirmedAt = time.Now()
+	_, err = us.ur.Update(ctx, account)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.RegisterDto) (*entity.EmailConfirmationToken, error) {

@@ -17,6 +17,50 @@ func NewEmailTokensRepository(db *pgxpool.Pool) *EmailTokensRepository {
 	return &EmailTokensRepository{db}
 }
 
+func (ur *EmailTokensRepository) GetByToken(ctx context.Context, token string) (*entity.EmailConfirmationToken, error) {
+	op := "EmailTokensRepository.GetByToken"
+	conn, err := ur.db.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: acquire connection: %w", op, err)
+	}
+	defer conn.Release()
+
+	queryBuilder := sq.Select(
+		"id",
+		"developer_id",
+		"token",
+		"numberic_code",
+		"expires_at",
+		"used_at",
+		"created_at",
+	).
+		From("email_confirmation_token").
+		Where(sq.Eq{"token": token}).
+		PlaceholderFormat(sq.Dollar)
+
+	sqlQuery, args, err := queryBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%s: build query: %w", op, err)
+	}
+	var tokenEntity entity.EmailConfirmationToken
+	row := conn.QueryRow(ctx, sqlQuery, args...)
+	err = row.Scan(
+		&tokenEntity.ID,
+		&tokenEntity.DeveloperID,
+		&tokenEntity.Token,
+		&tokenEntity.NumbericCode,
+		&tokenEntity.ExpiresAt,
+		&tokenEntity.UsedAt,
+		&tokenEntity.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("%s: scan row: %w", op, err)
+	}
+	return &tokenEntity, nil
+
+}
+
 func (ur *EmailTokensRepository) Create(ctx context.Context, emailConfToken *entity.EmailConfirmationToken) (*entity.EmailConfirmationToken, error) {
 	op := "EmailTokensRepository.Create"
 	conn, err := ur.db.Acquire(ctx)
@@ -36,6 +80,7 @@ func (ur *EmailTokensRepository) Create(ctx context.Context, emailConfToken *ent
 		Values(
 			emailConfToken.DeveloperID,
 			emailConfToken.Token,
+			emailConfToken.NumbericCode,
 			emailConfToken.ExpiresAt,
 		).
 		Suffix(`

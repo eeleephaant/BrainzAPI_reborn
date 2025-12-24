@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -124,6 +125,45 @@ func (ur *UserRepository) GetByEmail(ctx context.Context, email string) (*entity
 		Select("id", "email", "password_hash", "email_confirmed_at", "salt", "two_factor_secret", "created_at", "banned_at", "role_id").
 		From("developer_accounts").
 		Where(sq.Eq{"email": email}).
+		PlaceholderFormat(sq.Dollar)
+	sqlQuery, args, err := queryBuilder.ToSql()
+
+	if err != nil {
+		return nil, fmt.Errorf("%s: build query: %w", op, err)
+	}
+
+	var account entity.DeveloperAccount
+	row := conn.QueryRow(ctx, sqlQuery, args...)
+
+	if err := row.Scan(
+		&account.ID,
+		&account.Email,
+		&account.PasswordHash,
+		&account.EmailConfirmedAt,
+		&account.Salt,
+		&account.TwoFactorSecret,
+		&account.CreatedAt,
+		&account.BannedAt,
+		&account.RoleId,
+	); err != nil {
+		return nil, fmt.Errorf("%s: execute query: %w", op, err)
+	}
+
+	return &account, nil
+}
+
+func (ur *UserRepository) GetById(ctx context.Context, devId uuid.UUID) (*entity.DeveloperAccount, error) {
+	op := "UserRepository.GetById"
+	conn, err := ur.db.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: acquire connection: %w", op, err)
+	}
+	defer conn.Release()
+
+	queryBuilder := sq.
+		Select("id", "email", "password_hash", "email_confirmed_at", "salt", "two_factor_secret", "created_at", "banned_at", "role_id").
+		From("developer_accounts").
+		Where(sq.Eq{"id": devId}).
 		PlaceholderFormat(sq.Dollar)
 	sqlQuery, args, err := queryBuilder.ToSql()
 
