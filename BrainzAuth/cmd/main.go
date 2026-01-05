@@ -1,20 +1,24 @@
 package main
 
 import (
-	"brainz/auth/internal/db"
-	"brainz/auth/internal/models"
-	"brainz/auth/internal/router"
+	"brainz/auth/internal/app"
+	"brainz/auth/internal/config"
+	"context"
 
-	"github.com/cloudwego/hertz/pkg/app/server"
+	"go.uber.org/zap"
 )
 
+func init() {
+	zap.ReplaceGlobals(zap.Must(zap.NewDevelopment()))
+}
+
 func main() {
-	db.Connect()
-	db.DB.AutoMigrate(&models.ApiKey{}, &models.ApiKeyUsage{})
+	cfg := config.MustLoad()
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	h := server.Default(server.WithHostPorts(":8080"))
-
-	router.Register(h)
-
-	h.Spin()
+	if err := app.Run(ctx, cfg); err != nil {
+		panic(err)
+	}
 }

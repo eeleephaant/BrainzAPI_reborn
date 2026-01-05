@@ -3,7 +3,7 @@ package dtos
 import (
 	"time"
 
-	"github.com/gofrs/uuid/v5"
+	"github.com/google/uuid"
 )
 
 type ApiKeyUsage struct {

@@ -20,16 +20,8 @@ func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 	op := "handlers.Login"
 	loginData := dtos.LoginDto{}
 
-	if err := c.Bind(&loginData); err != nil {
+	if err := c.BindAndValidate(&loginData); err != nil {
 		c.JSON(400, map[string]string{"error": "invalid request"})
-		return
-	}
-
-	if errs, err := loginData.Validate(); err != nil {
-		c.JSON(400, map[string]any{
-			"message": "validation failed",
-			"errors":  errs,
-		})
 		return
 	}
 
@@ -65,16 +57,8 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 	op := "handlers.Register"
 	registerData := dtos.RegisterDto{}
 
-	if err := c.Bind(&registerData); err != nil {
+	if err := c.BindAndValidate(&registerData); err != nil {
 		c.String(400, err.Error())
-		return
-	}
-
-	if errs, err := registerData.Validate(); err != nil {
-		c.JSON(400, map[string]any{
-			"message": "validation failed",
-			"errors":  errs,
-		})
 		return
 	}
 
@@ -83,6 +67,7 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 		switch {
 		case errors.Is(err, entity.ErrEmailAlreadyExists):
 			c.JSON(409, map[string]string{"error": "email already exists"})
+			return
 		default:
 			c.JSON(500, map[string]string{"error": "internal server error"})
 			zap.L().Error(op,
@@ -92,5 +77,5 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 
-	c.JSON(201, map[string]string{"meSsage": "User created"})
+	c.JSON(201, map[string]string{"message": "User created, check your email to confirm it"})
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type UserService struct {
@@ -16,8 +17,8 @@ type UserService struct {
 	ecs *EmailService
 }
 
-func NewUserService(ur *repository.UserRepository) *UserService {
-	return &UserService{ur: ur}
+func NewUserService(ur *repository.UserRepository, ecs *EmailService) *UserService {
+	return &UserService{ur: ur, ecs: ecs}
 }
 
 func (us *UserService) Authenticate(ctx context.Context, email string, password string) (*entity.DeveloperAccount, error) {
@@ -46,7 +47,8 @@ func (us *UserService) ConfirmEmail(ctx context.Context, devId uuid.UUID) error 
 	if err != nil {
 		return err
 	}
-	*account.EmailConfirmedAt = time.Now()
+	now := time.Now()
+	account.EmailConfirmedAt = &now
 	_, err = us.ur.Update(ctx, account)
 	if err != nil {
 		return err
@@ -71,6 +73,11 @@ func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.Reg
 	}
 
 	err, ect := us.ecs.SendConfirmationEmail(ctx, acc.ID)
+
+	zap.L().Debug("Sent confirmation email",
+		zap.String("token", ect.Token),
+		zap.String("code", ect.NumbericCode),
+	)
 
 	if err != nil {
 		return nil, err

@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	zap.ReplaceGlobals(zap.Must(zap.NewProduction()))
+	zap.ReplaceGlobals(zap.Must(zap.NewDevelopment()))
 }
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if err := app.Run(ctx, nil, cfg); err != nil {
+	if err := app.Run(ctx, cfg); err != nil {
 		panic(err)
 	}
 }

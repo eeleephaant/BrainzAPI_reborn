@@ -17,7 +17,7 @@ func NewEmailTokensRepository(db *pgxpool.Pool) *EmailTokensRepository {
 	return &EmailTokensRepository{db}
 }
 
-func (ur *EmailTokensRepository) GetByToken(ctx context.Context, token string) (*entity.EmailConfirmationToken, error) {
+func (ur *EmailTokensRepository) GetByTokenAndCode(ctx context.Context, token string, code string) (*entity.EmailConfirmationToken, error) {
 	op := "EmailTokensRepository.GetByToken"
 	conn, err := ur.db.Acquire(ctx)
 	if err != nil {
@@ -35,7 +35,7 @@ func (ur *EmailTokensRepository) GetByToken(ctx context.Context, token string) (
 		"created_at",
 	).
 		From("email_confirmation_token").
-		Where(sq.Eq{"token": token}).
+		Where(sq.Eq{"token": token, "numberic_code": code}).
 		PlaceholderFormat(sq.Dollar)
 
 	sqlQuery, args, err := queryBuilder.ToSql()
@@ -85,7 +85,7 @@ func (ur *EmailTokensRepository) Create(ctx context.Context, emailConfToken *ent
 		).
 		Suffix(`
 			RETURNING
-				id, developer_id, token, expires_at, used_at, created_at
+				id, developer_id, token, expires_at, used_at, created_at, numberic_code
 		`).
 		PlaceholderFormat(sq.Dollar)
 
@@ -102,6 +102,7 @@ func (ur *EmailTokensRepository) Create(ctx context.Context, emailConfToken *ent
 		&created.ExpiresAt,
 		&created.UsedAt,
 		&created.CreatedAt,
+		&created.NumbericCode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("%s: scan row: %w", op, err)
@@ -121,11 +122,12 @@ func (ur *EmailTokensRepository) Update(ctx context.Context, emailConfToken *ent
 		Set("developer_id", emailConfToken.DeveloperID).
 		Set("token", emailConfToken.Token).
 		Set("expires_at", emailConfToken.ExpiresAt).
+		Set("numberic_code", emailConfToken.NumbericCode).
 		Set("used_at", emailConfToken.UsedAt).
 		Where(sq.Eq{"id": emailConfToken.ID}).
 		Suffix(`
 			RETURNING
-				id, developer_id, token, expires_at, used_at, created_at
+				id, developer_id, token, expires_at, used_at, created_at, numberic_code
 		`).
 		PlaceholderFormat(sq.Dollar)
 
@@ -143,6 +145,7 @@ func (ur *EmailTokensRepository) Update(ctx context.Context, emailConfToken *ent
 		&updated.ExpiresAt,
 		&updated.UsedAt,
 		&updated.CreatedAt,
+		&updated.NumbericCode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("%s: scan row: %w", op, err)

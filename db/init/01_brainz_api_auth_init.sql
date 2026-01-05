@@ -6,10 +6,15 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE api_key (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name          TEXT NOT NULL DEFAULT 'Untitled key',
     expire_at     TIMESTAMPTZ NOT NULL,
     revoked_at    TIMESTAMPTZ,
     developer_id  UUID NOT NULL, -- ID из микросервиса developer portal
-    key_hash      TEXT NOT NULL
+    key_hash      BYTEA NOT NULL,
+    salt          BYTEA NOT NULL,
+    prefix_raw    varchar(10) NOT NULL, -- bcs format is brainz_xxxxxxxxxxxxxxx
+    suffix_raw    varchar(4) NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE api_key_permission (
@@ -39,23 +44,14 @@ CREATE TABLE api_key_usage (
     response_code TEXT NOT NULL
 );
 
-CREATE TABLE api_key_institution_permission (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    api_key_id UUID NOT NULL REFERENCES api_key(id) ON DELETE CASCADE,
-    institution_id INTEGER NOT NULL, -- ID из микросервиса lessons
-    permission_id INTEGER NOT NULL REFERENCES api_key_permission(id) ON DELETE RESTRICT,
-    granted_at TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT api_key_institution_perm_unique UNIQUE (api_key_id, institution_id, permission_id)
-);
-
-
-
-CREATE TABLE api_key_global_permission (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    api_key_id UUID NOT NULL REFERENCES api_key(id) ON DELETE CASCADE,
-    permission_id INTEGER NOT NULL REFERENCES api_key_permission(id) ON DELETE RESTRICT,
-    granted_at TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT api_key_global_perm_unique UNIQUE (api_key_id, permission_id)
+CREATE TABLE api_key_permission_grant (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    api_key_id      UUID NOT NULL REFERENCES api_key(id) ON DELETE CASCADE,
+    permission_id   INTEGER NOT NULL REFERENCES api_key_permission(id) ON DELETE RESTRICT,
+    institution_id  INTEGER NULL,  -- NULL = глобальная, NOT NULL = для конкретной организации
+    granted_at      TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT api_key_perm_unique
+        UNIQUE (api_key_id, permission_id, institution_id)
 );
 
 CREATE INDEX idx_api_key_usage_api_key_id ON api_key_usage(api_key_id);

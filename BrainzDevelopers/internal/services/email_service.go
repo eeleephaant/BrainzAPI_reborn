@@ -45,8 +45,12 @@ func (ecs *EmailService) SendConfirmationEmail(ctx context.Context, developerId 
 	return nil, emailConfToken
 }
 
+func (ecs *EmailService) ResendEmailConfirmationCode(ctx context.Context, developerId uuid.UUID) (error, *entity.EmailConfirmationToken) {
+	return ecs.SendConfirmationEmail(ctx, developerId)
+}
+
 func (ecs *EmailService) ConfirmEmailCode(ctx context.Context, token string, code string) (*entity.EmailConfirmationToken, error) {
-	ect, err := ecs.etr.GetByToken(ctx, token)
+	ect, err := ecs.etr.GetByTokenAndCode(ctx, token, code)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +63,8 @@ func (ecs *EmailService) ConfirmEmailCode(ctx context.Context, token string, cod
 		return nil, entity.ErrEmailCodeAlreadyUsed
 	}
 
-	*ect.UsedAt = time.Now()
+	now := time.Now()
+	ect.UsedAt = &now
 	ect, err = ecs.etr.Update(ctx, ect)
 	if err != nil {
 		return nil, err

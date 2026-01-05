@@ -1,31 +1,37 @@
 package db
 
 import (
+	"brainz/auth/internal/config"
+	"context"
 	"fmt"
 	"log"
-	"os"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var DB *gorm.DB
+var AuthPool *pgxpool.Pool
 
-func Connect() {
-	host := os.Getenv("DB_HOST")
-	port := os.Getenv("DB_PORT")
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASSWORD")
-	dbname := os.Getenv("DB_NAME")
+func Connect(ctx context.Context, cfg *config.PostgresConfig) {
+	dsnAuth := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
 
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-		host, user, password, dbname, port,
-	)
+	poolConfigAuth, err := pgxpool.ParseConfig(dsnAuth)
 
-	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal("failed to connect database:", err)
+		log.Fatalf("failed to parse pgx config (devs): %v", err)
 	}
-	DB = database
+	poolConfigAuth.MaxConns = cfg.PoolMax
+	poolConfigAuth.MinConns = 3
+
+	authsPoool, err := pgxpool.NewWithConfig(ctx, poolConfigAuth)
+	if err != nil {
+		log.Fatalf("failed to create pgx pool (devs): %v", err)
+	}
+	AuthPool = authsPoool
+}
+
+func Close() {
+	if AuthPool != nil {
+		AuthPool.Close()
+	}
 }

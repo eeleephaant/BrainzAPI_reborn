@@ -8,7 +8,7 @@ CREATE TABLE
 
 
 CREATE TABLE
-    developer_account (
+    developer_accounts (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
         email TEXT NOT NULL UNIQUE,
         email_confirmed_at TIMESTAMPTZ DEFAULT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE
 
 CREATE TABLE email_confirmation_token (
 	id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-	developer_id UUID NOT NULL REFERENCES developer_account (id) ON DELETE CASCADE,
+	developer_id UUID NOT NULL REFERENCES developer_accounts (id) ON DELETE CASCADE,
 	token TEXT NOT NULL UNIQUE,
     numberic_code TEXT NOT NULL,
 	expires_at TIMESTAMPTZ NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE email_confirmation_token (
 CREATE TABLE
     developer_session (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-        developer_id UUID REFERENCES developer_account (id) ON DELETE CASCADE,
+        developer_id UUID REFERENCES developer_accounts (id) ON DELETE CASCADE,
         user_agent TEXT NOT NULL,
         ip_address TEXT NOT NULL,
         token_hash BYTEA NOT NULL UNIQUE,

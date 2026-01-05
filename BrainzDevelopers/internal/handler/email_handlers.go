@@ -21,26 +21,18 @@ func (h *EmailHandler) GetConfirmEmailCode(ctx context.Context, c *app.RequestCo
 
 	emailConfirmData := dtos.ConfirmEmailCode{}
 
-	if err := c.Bind(&emailConfirmData); err != nil {
+	if err := c.BindAndValidate(&emailConfirmData); err != nil {
 		c.String(400, err.Error())
 		return
 	}
 
-	if errs, err := emailConfirmData.Validate(); err != nil {
-		c.JSON(400, map[string]any{
-			"message": "validation failed",
-			"errors":  errs,
-		})
-		return
-	}
-
-	ect, err := h.Es.ConfirmEmailCode(ctx, confirmEmailDto.Token, confirmEmailDto.Code)
+	ect, err := h.Es.ConfirmEmailCode(ctx, emailConfirmData.Token, emailConfirmData.Code)
 	if err != nil {
 		switch {
 		case errors.Is(err, entity.ErrEmailCodeAlreadyUsed):
-			c.JSON(401, map[string]string{"status": "code is already used"})
+			c.JSON(401, map[string]string{"error": "code is already used"})
 		case errors.Is(err, entity.ErrEmailCodeExpired):
-			c.JSON(401, map[string]string{"status": "code is expired"})
+			c.JSON(401, map[string]string{"error": "code is expired"})
 		default:
 			c.JSON(500, map[string]string{"error": "internal server error while h.Es.ConfirmEmailCode(ctx, confirmEmailDto.Token, confirmEmailDto.Code)"})
 			zap.L().Error(op,
@@ -51,7 +43,7 @@ func (h *EmailHandler) GetConfirmEmailCode(ctx context.Context, c *app.RequestCo
 	}
 	err = h.Us.ConfirmEmail(ctx, ect.DeveloperID)
 	if err != nil {
-		c.JSON(500, map[string]string{"status": "internal error while h.Us.ConfirmEmail(ctx, ect.DeveloperID)"})
+		c.JSON(500, map[string]string{"error": "internal error while h.Us.ConfirmEmail(ctx, ect.DeveloperID)"})
 		return
 	}
 	c.JSON(200, map[string]string{"status": "success"})
