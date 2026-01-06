@@ -47,12 +47,12 @@ func (aks *ApiKeysService) ValidateKey(ctx context.Context, raw_key string) erro
 	return nil
 }
 
-func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UUID, name string) (error, *models.ApiKey, *string) {
+func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UUID, name string) (*models.ApiKey, *string, error) {
 	op := "ApiKeysService.CreateApiKey"
 	expiresAt := time.Now().AddDate(0, 2, 0)
 	rawKey, err := utils.GenerateSecretKey(32)
 	if err != nil {
-		return fmt.Errorf("%s: failed to generate raw api key: %w", op, err), nil, nil
+		return nil, nil, fmt.Errorf("%s: failed to generate raw api key: %w", op, err)
 	}
 	salt := utils.GetRandomSalt()
 	hashedKey := utils.GetHashArgon2(rawKey, salt)
@@ -74,10 +74,10 @@ func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UU
 
 	createdKey, err := aks.akr.Create(ctx, &newKey)
 	if err != nil {
-		return fmt.Errorf("%s: failed to create api key in db: %w", op, err), nil, nil
+		return nil, nil, fmt.Errorf("%s: failed to create api key in db: %w", op, err)
 	}
 
-	return nil, createdKey, &displayedKey
+	return createdKey, &displayedKey, nil
 }
 
 func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, keyId uuid.UUID) error {
@@ -93,11 +93,11 @@ func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, keyId uuid.UUID) er
 	return nil
 }
 
-func (aks *ApiKeysService) GetApiKeys(ctx context.Context, developerId uuid.UUID) (error, []*models.ApiKey) {
+func (aks *ApiKeysService) GetApiKeys(ctx context.Context, developerId uuid.UUID) ([]*models.ApiKey, error) {
 	op := "ApiKeysService.GetApiKeys"
 	keys, err := aks.akr.GetAllByDeveloperId(ctx, developerId)
 	if err != nil {
-		return fmt.Errorf("%s: failed to get api keys from db: %w", op, err), nil
+		return nil, fmt.Errorf("%s: failed to get api keys from db: %w", op, err)
 	}
-	return nil, keys
+	return keys, nil
 }

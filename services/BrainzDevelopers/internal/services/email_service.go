@@ -19,7 +19,7 @@ func NewEmailConfirmService(etr *repository.EmailTokensRepository) *EmailService
 	return &EmailService{etr: etr}
 }
 
-func (ecs *EmailService) SendConfirmationEmail(ctx context.Context, developerId uuid.UUID) (error, *entity.EmailConfirmationToken) {
+func (ecs *EmailService) SendConfirmationEmail(ctx context.Context, developerId uuid.UUID) (*entity.EmailConfirmationToken, error) {
 	op := "EmailService.SendConfirmationEmail"
 
 	numCode, err := security.GenerateRandomNumericCode(6)
@@ -40,13 +40,9 @@ func (ecs *EmailService) SendConfirmationEmail(ctx context.Context, developerId 
 
 	emailConfToken, err = ecs.etr.Create(ctx, emailConfToken)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, emailConfToken
-}
-
-func (ecs *EmailService) ResendEmailConfirmationCode(ctx context.Context, developerId uuid.UUID) (error, *entity.EmailConfirmationToken) {
-	return ecs.SendConfirmationEmail(ctx, developerId)
+	return emailConfToken, nil
 }
 
 func (ecs *EmailService) ConfirmEmailCode(ctx context.Context, token string, code string) (*entity.EmailConfirmationToken, error) {

@@ -161,11 +161,11 @@ func (akr *ApiKeysRepository) Create(ctx context.Context, key *models.ApiKey) (*
 	}
 	return &created, nil
 }
-func (akr *ApiKeysRepository) Update(ctx context.Context, key *models.ApiKey) (error, *models.ApiKey) {
+func (akr *ApiKeysRepository) Update(ctx context.Context, key *models.ApiKey) (*models.ApiKey, error) {
 	op := "ApiKeysRepository.Update"
 	conn, err := akr.db.Acquire(ctx)
 	if err != nil {
-		return fmt.Errorf("%s: acquire connection: %w", op, err), nil
+		return nil, fmt.Errorf("%s: acquire connection: %w", op, err)
 	}
 	defer conn.Release()
 	queryBuilder := sq.
@@ -188,7 +188,7 @@ func (akr *ApiKeysRepository) Update(ctx context.Context, key *models.ApiKey) (e
 
 	sqlQuery, args, err := queryBuilder.ToSql()
 	if err != nil {
-		return fmt.Errorf("%s: build query: %w", op, err), nil
+		return nil, fmt.Errorf("%s: build query: %w", op, err)
 	}
 	var updated models.ApiKey
 	row := conn.QueryRow(ctx, sqlQuery, args...)
@@ -205,9 +205,9 @@ func (akr *ApiKeysRepository) Update(ctx context.Context, key *models.ApiKey) (e
 		&updated.SuffixRaw,
 	)
 	if err != nil {
-		return fmt.Errorf("%s: scan: %w", op, err), nil
+		return nil, fmt.Errorf("%s: scan: %w", op, err)
 	}
-	return nil, &updated
+	return &updated, nil
 }
 
 func (akr *ApiKeysRepository) Remove(ctx context.Context, key *models.ApiKey) error {

@@ -72,7 +72,7 @@ func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.Reg
 		return nil, err
 	}
 
-	err, ect := us.ecs.SendConfirmationEmail(ctx, acc.ID)
+	ect, err := us.ecs.SendConfirmationEmail(ctx, acc.ID)
 
 	zap.L().Debug("Sent confirmation email",
 		zap.String("token", ect.Token),
