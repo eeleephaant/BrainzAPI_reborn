@@ -1,6 +1,6 @@
 services:
   brainz-api:
-    build: ./BrainzSchedules
+    build: ./services/BrainzSchedules
     depends_on:
       - db
       - redis
@@ -23,7 +23,7 @@ services:
       - appnet
 
   brainz-auth:
-    build: ./BrainzAuth
+    build: ./services/BrainzAuth
     depends_on:
       - db
     environment:
@@ -41,7 +41,7 @@ services:
       - appnet
 
   brainz-developers:
-    build: ./BrainzDevelopers
+    build: ./services/BrainzDevelopers
     depends_on:
       - db
     ports:
@@ -60,7 +60,7 @@ services:
       - appnet
 
   brainz-parser:
-    build: ./BrainzParser
+    build: ./services/BrainzParser
     depends_on:
       - db
     ports:
