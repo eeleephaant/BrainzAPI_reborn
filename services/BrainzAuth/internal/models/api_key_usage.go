@@ -2,15 +2,14 @@ package models
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type ApiKeyUsage struct {
-	ID        uint
-	ApiKeyID  uint
-	Endpoint  string
-	Method    string
-	Status    int
-	LatencyMs int
-	IP        string
-	CreatedAt time.Time
+	ID           uuid.UUID
+	ApiKeyID     uuid.UUID
+	Endpoint     string
+	ResponseCode string
+	UsageAt      time.Time
 }
