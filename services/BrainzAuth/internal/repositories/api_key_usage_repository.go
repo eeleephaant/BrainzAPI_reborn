@@ -34,7 +34,7 @@ func (akur *ApiKeyUsageRepository) Create(ctx context.Context, key *models.ApiKe
 	`).PlaceholderFormat(sq.Dollar)
 	sqlQuery, args, err := queryBuilder.ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("%s: duild query: %w", op, err)
+		return nil, fmt.Errorf("%s: build query: %w", op, err)
 	}
 
 	var created models.ApiKeyUsage

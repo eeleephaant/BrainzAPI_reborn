@@ -42,5 +42,4 @@ func (ah *AuthHandler) Auth(ctx context.Context, c *app.RequestContext) {
 		Status:       true,
 		ErrorMessage: "",
 	})
-
 }

@@ -1,9 +1,10 @@
 package main
 
 import (
+	"brainz-api/internal/config"
 	"brainz-api/internal/db"
 	"brainz-api/internal/middleware"
-	"brainz-api/internal/router"
+	"context"
 	"net/http"
 	"time"
 
@@ -12,11 +13,10 @@ import (
 )
 
 func main() {
-	db.ConnectPostgres()
-	db.ConnectRedis()
-	db.DB.AutoMigrate(&models.Institution{}, &models.Group{}, &models.Lesson{})
-
-	db.DB.FirstOrCreate(&models.Institution{}, models.Institution{Name: "ТТСИиГХ"}, models.Institution{Site: "http://tci72.ru"})
+	ctx := context.Background()
+	cfg := config.MustLoad()
+	db.ConnectPostgres(ctx, &cfg.Postgres)
+	db.ConnectRedis(ctx, &cfg.Redis)
 
 	h := server.Default(server.WithHostPorts(":8080"))
 	h.NoHijackConnPool = true
@@ -24,8 +24,6 @@ func main() {
 	h.Use(middleware.RecoveryMiddleware())
 	h.Use(limiter.AdaptiveLimit())
 	h.Use(middleware.AuthMiddleware("http://brainz-auth:8080/auth", &http.Client{Timeout: 3 * time.Second}))
-
-	router.Register(h)
 
 	h.Spin()
 }
