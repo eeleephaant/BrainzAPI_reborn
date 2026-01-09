@@ -1,4 +1,4 @@
-package wsmodels
+package models
 
 import (
 	"log"

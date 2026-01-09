@@ -1,31 +1,39 @@
 package db
 
 import (
+	"brainz-api/internal/config"
+	"context"
 	"fmt"
 	"log"
-	"os"
+	"time"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var DB *gorm.DB
+var SchedulePool *pgxpool.Pool
 
-func Connect() {
-	host := os.Getenv("DB_HOST")
-	port := os.Getenv("DB_PORT")
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASSWORD")
-	dbname := os.Getenv("DB_NAME")
+func ConnectPostgres(ctx context.Context, cfg *config.PostgresConfig) error {
+	dsnSched := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
 
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-		host, user, password, dbname, port,
-	)
+	poolConfig, err := pgxpool.ParseConfig(dsnSched)
 
-	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal("failed to connect database:", err)
+		log.Fatalf("failed to parse pgx config (devs): %v", err)
 	}
-	DB = database
+	poolConfig.MaxConns = cfg.PoolMax
+	poolConfig.MinConns = 3
+
+	for i := range 3 {
+		devsPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+		if err != nil {
+			log.Printf("failed to create pgx pool (devs), attempt %d: %v", i+1, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		SchedulePool = devsPool
+		return nil
+	}
+	return fmt.Errorf("failed to create pgx pool (devs) after 3 attempts: %v", err)
+
 }

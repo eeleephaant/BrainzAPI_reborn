@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/google/uuid"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -15,11 +14,11 @@ type ApiKeyUsageRepository struct {
 	db *pgxpool.Pool
 }
 
-func NewApiKeyUsageRepository(db *pgxpool.Pool) *ApiKeyUsageRepository{
+func NewApiKeyUsageRepository(db *pgxpool.Pool) *ApiKeyUsageRepository {
 	return &ApiKeyUsageRepository{db}
 }
 
-func (akur *ApiKeyUsageRepository) Create(ctx context.Context, key *models.ApiKeyUsage) (*models.ApiKeyUsage, error){
+func (akur *ApiKeyUsageRepository) Create(ctx context.Context, key *models.ApiKeyUsage) (*models.ApiKeyUsage, error) {
 	op := "ApiKeyUsageRepository.Create"
 	conn, err = akur.db.Acquire(ctx)
 	if err != nil {
@@ -27,9 +26,9 @@ func (akur *ApiKeyUsageRepository) Create(ctx context.Context, key *models.ApiKe
 	}
 	defer conn.Release()
 	queryBuilder := sq.Insert("api_key_usage").
-	Columns("id", "api_key_id", "endpoint", "usage_at", "response_code").
-	Values(key.ID, key.ApiKeyID, key.Endpoint, key.CreatedAt, key.Status).
-	Suffix(`
+		Columns("id", "api_key_id", "endpoint", "usage_at", "response_code").
+		Values(key.ID, key.ApiKeyID, key.Endpoint, key.CreatedAt, key.Status).
+		Suffix(`
 			RETURNING
 				id, api_key_id, developer_id, endpoint, usage_at, created_at, response_code
 		`).

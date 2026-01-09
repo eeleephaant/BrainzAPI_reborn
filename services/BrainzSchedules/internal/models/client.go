@@ -1,4 +1,4 @@
-package wsmodels
+package models
 
 import "github.com/hertz-contrib/websocket"
 

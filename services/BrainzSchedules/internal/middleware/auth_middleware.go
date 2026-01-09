@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"brainz-api/internal/db"
-	"brainz-api/internal/models/dtos"
+	"brainz-api/internal/dtos"
 
 	"github.com/bytedance/sonic"
 	"github.com/cloudwego/hertz/pkg/app"

@@ -3,7 +3,6 @@ package main
 import (
 	"brainz-api/internal/db"
 	"brainz-api/internal/middleware"
-	models "brainz-api/internal/models/db_models"
 	"brainz-api/internal/router"
 	"net/http"
 	"time"
@@ -13,7 +12,7 @@ import (
 )
 
 func main() {
-	db.Connect()
+	db.ConnectPostgres()
 	db.ConnectRedis()
 	db.DB.AutoMigrate(&models.Institution{}, &models.Group{}, &models.Lesson{})
 

@@ -1,7 +1,7 @@
 package handler
 
 import (
-	wsmodels "brainz-api/internal/models/ws_models"
+	"brainz-api/internal/models"
 	"context"
 	"fmt"
 	"log"
@@ -25,14 +25,14 @@ func InfoStreamHandler(ctx context.Context, c *app.RequestContext) {
 	}
 
 	err := upgrader.Upgrade(c, func(conn *websocket.Conn) {
-		client := &wsmodels.Client{
+		client := &models.Client{
 			Conn: conn,
 			Send: make(chan []byte, 10),
 		}
 
 		channel := fmt.Sprintf("info_stream:%s", institutionID)
-		wsmodels.MainHub.AddClient(channel, client)
-		defer wsmodels.MainHub.RemoveClient(channel, client)
+		models.MainHub.AddClient(channel, client)
+		defer models.MainHub.RemoveClient(channel, client)
 		defer conn.Close()
 		defer close(client.Send)
 
