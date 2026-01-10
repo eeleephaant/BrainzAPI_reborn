@@ -1,66 +1,58 @@
 package handler
 
 import (
-	"brainz-api/internal/db"
+	"brainz-api/internal/services"
 	"context"
-	"fmt"
+	"net/http"
+	"strconv"
 	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/redis/go-redis/v9"
 )
 
-func GetLessonsCount(ctx context.Context, c *app.RequestContext) {
-
-	c.JSON(200, "")
+type ScheduleHandler struct {
+	rc *redis.Client
+	ls *services.LessonService
 }
 
-func GetAvailableScheduleDays(ctx context.Context, c *app.RequestContext) {
-	startDateStr := string(c.Query("start_date"))
-	endDateStr := string(c.Query("end_date"))
-	institution_id := string(c.Query("institution_id"))
-
-	if startDateStr == "" || endDateStr == "" {
-		c.JSON(400, map[string]string{"error": "start_date and end_date are required"})
-		return
-	}
-
-	startDate, err1 := time.Parse("2006-01-02", startDateStr)
-	endDate, err2 := time.Parse("2006-01-02", endDateStr)
-	if err1 != nil || err2 != nil {
-		c.JSON(400, map[string]string{"error": "invalid date format, use YYYY-MM-DD"})
-		return
-	}
-
-	endDate = endDate.AddDate(0, 0, 1)
-
-	c.JSON(200, "")
+func NewScheduleHandler(rc *redis.Client, ls *services.LessonService) *ScheduleHandler {
+	return &ScheduleHandler{rc, ls}
 }
 
-func GetLessons(ctx context.Context, c *app.RequestContext) {
-	instID := c.Query("institution_id")
+func (sh *ScheduleHandler) GetLessons(ctx context.Context, c *app.RequestContext) {
+	instIDStr := c.Query("institution_id")
 	dateStr := c.Query("date")
-
-	var institutionID uint
-	if instID != "" {
-		_, err := fmt.Sscan(instID, &institutionID)
-		if err != nil {
-			c.JSON(500, map[string]string{"error": err.Error()})
-		}
+	if instIDStr == "" {
+		c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "institution_id is required",
+		})
+		return
 	}
 
-	var startOfDay, endOfDay time.Time
-	if dateStr != "" {
-		t, err := time.Parse("2006-01-02", dateStr)
-		if err != nil {
-			c.JSON(500, map[string]string{"error": err.Error()})
-		}
-		startOfDay = t
-		endOfDay = t.Add(24 * time.Hour)
+	institutionID, err := strconv.ParseUint(instIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid institution_id format",
+		})
+		return
 	}
 
-	// c.Data(200, "application/json", "")
+	targetDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid date format, expected YYYY-MM-DD",
+		})
+		return
+	}
 
-	// db.RedisClient.Set(ctx, key, jsonData, time.Hour*1)
+	lessons, err := sh.ls.GetForDateAndInstitution(ctx, targetDate, institutionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "internal server error",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, lessons)
 }

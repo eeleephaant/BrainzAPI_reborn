@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"time"
 
-	"brainz-api/internal/db"
 	"brainz-api/internal/dtos"
 
 	"github.com/bytedance/sonic"
@@ -15,7 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func AuthMiddleware(verifyURL string, client *http.Client) app.HandlerFunc {
+func AuthMiddleware(verifyURL string, client *http.Client, rc *redis.Client) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		apiKey := string(ctx.Request.Header.Peek("X-API-Key"))
 		if apiKey == "" {
@@ -25,7 +24,7 @@ func AuthMiddleware(verifyURL string, client *http.Client) app.HandlerFunc {
 
 		cacheKey := "api_key:" + apiKey
 
-		_, err := db.RedisClient.GetEx(c, cacheKey, 2*time.Minute).Result()
+		_, err := rc.GetEx(c, cacheKey, 2*time.Minute).Result()
 		if err == nil {
 			ctx.Next(c)
 			return
@@ -70,7 +69,7 @@ func AuthMiddleware(verifyURL string, client *http.Client) app.HandlerFunc {
 			return
 		}
 
-		db.RedisClient.Set(c, cacheKey, "valid", 5*time.Minute)
+		rc.Set(c, cacheKey, "valid", 1*time.Minute)
 
 		ctx.Next(c)
 	}

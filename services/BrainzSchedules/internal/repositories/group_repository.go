@@ -17,6 +17,40 @@ func NewGroupRepository(db *pgxpool.Pool) *GroupRepository {
 	return &GroupRepository{db}
 }
 
+func (r *GroupRepository) GetListForInstitution(ctx context.Context, instID int64) ([]models.Group, error) {
+	query, args, err := sq.
+		Select("id", "created_at", "updated_at", "deleted_at", "name", "institution_id").
+		From("groups").
+		Where(sq.Eq{"institution_id": instID}).
+		PlaceholderFormat(sq.Dollar).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var groups []models.Group
+	for rows.Next() {
+		var group models.Group
+		if err := rows.Scan(
+			&group.ID,
+			&group.CreatedAt,
+			&group.UpdatedAt,
+			&group.DeletedAt,
+			&group.Name,
+			&group.InstitutionID,
+		); err != nil {
+			return nil, err
+		}
+		groups = append(groups, group)
+	}
+	return groups, nil
+}
+
 func (r *GroupRepository) Create(ctx context.Context, group *models.Group) (int64, error) {
 	query, args, err := sq.
 		Insert("groups").
@@ -102,7 +136,7 @@ func (r *GroupRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (r *GroupRepository) List(ctx context.Context) ([]*models.Group, error) {
+func (r *GroupRepository) List(ctx context.Context) ([]models.Group, error) {
 	query, args, err := sq.
 		Select("id", "created_at", "updated_at", "deleted_at", "name", "institution_id").
 		From("groups").
@@ -117,7 +151,7 @@ func (r *GroupRepository) List(ctx context.Context) ([]*models.Group, error) {
 	}
 	defer rows.Close()
 
-	var groups []*models.Group
+	var groups []models.Group
 	for rows.Next() {
 		var group models.Group
 		if err := rows.Scan(
@@ -130,7 +164,7 @@ func (r *GroupRepository) List(ctx context.Context) ([]*models.Group, error) {
 		); err != nil {
 			return nil, err
 		}
-		groups = append(groups, &group)
+		groups = append(groups, group)
 	}
 	return groups, nil
 }
