@@ -1,4 +1,4 @@
-package db
+package storage
 
 import (
 	"brainz-api/internal/config"

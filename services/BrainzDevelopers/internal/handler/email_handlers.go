@@ -16,6 +16,10 @@ type EmailHandler struct {
 	Us *services.UserService
 }
 
+func NewEmailHandler(es *services.EmailService, us *services.UserService) *EmailHandler {
+	return &EmailHandler{Es: es, Us: us}
+}
+
 func (h *EmailHandler) GetConfirmEmailCode(ctx context.Context, c *app.RequestContext) {
 	op := "EmailHandler.GetConfirmEmailCode"
 

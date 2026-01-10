@@ -2,11 +2,11 @@ package app
 
 import (
 	"brainz-api/internal/config"
-	"brainz-api/internal/db"
 	"brainz-api/internal/handler"
 	"brainz-api/internal/repositories"
 	"brainz-api/internal/router"
 	"brainz-api/internal/services"
+	"brainz-api/internal/storage"
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -14,11 +14,11 @@ import (
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
-	psqlPool, err := db.ConnectPostgres(ctx, &cfg.Postgres)
+	psqlPool, err := storage.ConnectPostgres(ctx, &cfg.Postgres)
 	if err != nil {
 		panic(err)
 	}
-	rc, err := db.ConnectRedis(ctx, &cfg.Redis)
+	rc, err := storage.ConnectRedis(ctx, &cfg.Redis)
 	if err != nil {
 		panic(err)
 	}
@@ -39,7 +39,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	router.Register(ctx, h, sh, ih, gh)
 
-	go db.RedisEventsListener(ctx, rc)
+	go storage.RedisEventsListener(ctx, rc)
 
 	h.OnShutdown = append(h.OnShutdown, func(ctx context.Context) {
 		zap.L().Info("Stopping Server gracefully...")

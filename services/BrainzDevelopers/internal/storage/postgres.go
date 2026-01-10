@@ -1,7 +1,7 @@
-package db
+package storage
 
 import (
-	"brainz-api/internal/config"
+	"brainz/developersapi/internal/config"
 	"context"
 	"fmt"
 	"log"
