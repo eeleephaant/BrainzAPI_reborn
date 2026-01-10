@@ -6,7 +6,6 @@ import (
 	"brainz/auth/internal/utils"
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,17 +20,11 @@ func NewApiKeysService(akr *repositories.ApiKeysRepository) *ApiKeysService {
 }
 func (aks *ApiKeysService) ValidateKey(ctx context.Context, raw_key string) error {
 	op := "ApiKeysService.ValidateKey"
-	parts := strings.SplitN(raw_key, ":", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("%s: invalid apiKey format", op)
-	}
-	cleanUuid := strings.TrimPrefix(parts[0], "brainz_")
-	id, err := uuid.Parse(cleanUuid)
+	extractData, err := utils.ExtractDataFromKey(raw_key)
 	if err != nil {
-		return fmt.Errorf("%s: invalid apiKey ID: %w", op, err)
+		return err
 	}
-
-	key, err := aks.akr.GetById(ctx, id)
+	key, err := aks.akr.GetById(ctx, extractData.ID)
 	if err != nil {
 		return err
 	}
@@ -40,7 +33,7 @@ func (aks *ApiKeysService) ValidateKey(ctx context.Context, raw_key string) erro
 		return fmt.Errorf("%s: apiKey is revoked or expired", op)
 	}
 
-	if !utils.CheckPassword(parts[1], key.Salt, key.KeyHash) {
+	if !utils.CheckPassword(extractData.String, key.Salt, key.KeyHash) {
 		return fmt.Errorf("%s: invalid apiKey", op)
 	}
 

@@ -231,3 +231,48 @@ func (akr *ApiKeysRepository) Remove(ctx context.Context, key *models.ApiKey) er
 	}
 	return nil
 }
+func (akr *ApiKeysRepository) GetByName(ctx context.Context, keyName string) (*models.ApiKey, error) {
+	op := "ApiKeysRepository.GetIdByName"
+	conn, err := akr.db.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: acquire connection: %w", op, err)
+	}
+	defer conn.Release()
+	queryBuilder := sq.Select(
+		"id",
+		"name",
+		"developer_id",
+		"key_hash",
+		"salt",
+		"created_at",
+		"revoked_at",
+		"expired_at",
+		"prefix_raw",
+		"suffix_raw",
+	).
+		From("api_key").
+		Where(sq.Eq{"name": keyName}).
+		PlaceholderFormat(sq.Dollar)
+	sqlQuery, args, err := queryBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%s: build query: %w", op, err)
+	}
+	var key models.ApiKey
+	row := conn.QueryRow(ctx, sqlQuery, args...)
+	err = row.Scan(
+		&key.ID,
+		&key.Name,
+		&key.DeveloperID,
+		&key.KeyHash,
+		&key.Salt,
+		&key.CreatedAt,
+		&key.RevokedAt,
+		&key.ExpireAt,
+		&key.PrefixRaw,
+		&key.SuffixRaw,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%s: scan row: %w", op, err)
+	}
+	return &key, nil
+}

@@ -3,6 +3,7 @@ package services
 import (
 	"brainz/auth/internal/models"
 	"brainz/auth/internal/repositories"
+	"brainz/auth/internal/utils"
 	"context"
 	"time"
 
@@ -11,21 +12,27 @@ import (
 
 type ApiKeyUsageService struct {
 	akur *repositories.ApiKeyUsageRepository
+	akr  *repositories.ApiKeysRepository
 }
 
-func NewApiKeysUsageService(akur *repositories.ApiKeyUsageRepository) *ApiKeyUsageService {
-	return &ApiKeyUsageService{akur: akur}
+func NewApiKeysUsageService(akur *repositories.ApiKeyUsageRepository, akr *repositories.ApiKeysRepository) *ApiKeyUsageService {
+	return &ApiKeyUsageService{akur: akur,
+		akr: akr}
 }
 
-func (akus *ApiKeyUsageService) RecordUsage(ctx context.Context, APIKeyID uuid.UUID, endpoint string, responseCode string, method string) (*models.ApiKeyUsage, error) {
+func (akus *ApiKeyUsageService) RecordUsage(ctx context.Context, APIKey string, endpoint string, method string) (*models.ApiKeyUsage, error) {
 	// op := "ApiKeyUsageService.CreateUsage"
 	uuid := uuid.New()
+	APIKeyID, err := utils.ExtractDataFromKey(APIKey)
+	if err != nil {
+		return nil, err
+	}
 	newAPIKeyUsage := models.ApiKeyUsage{
 		ID:           uuid,
-		ApiKeyID:     APIKeyID,
+		ApiKeyID:     APIKeyID.ID,
 		Endpoint:     endpoint,
 		Method:       method,
-		ResponseCode: responseCode,
+		ResponseCode: "200",
 		UsageAt:      time.Now(),
 	}
 	createdApiKeyUsage, err := akus.akur.Create(ctx, &newAPIKeyUsage)

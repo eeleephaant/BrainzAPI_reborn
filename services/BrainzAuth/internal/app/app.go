@@ -21,8 +21,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	akr := repositories.NewApiKeysRepository(db.AuthPool)
 	aks := services.NewApiKeysService(akr)
-	akur := repositories.ApiKeyUsageRepository(db.AuthPool)
-	akus := services.NewApiKeysUsageService(akur)
+	akur := repositories.NewApiKeyUsageRepository(db.AuthPool)
+	akus := services.NewApiKeysUsageService(akur, akr)
 
 	router.Register(h, aks, akus)
 

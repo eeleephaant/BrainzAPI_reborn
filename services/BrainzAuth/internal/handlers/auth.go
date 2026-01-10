@@ -41,7 +41,15 @@ func (ah *AuthHandler) Auth(ctx context.Context, c *app.RequestContext) {
 		zap.L().Error("API key validation failed", zap.Error(err))
 		return
 	}
-
+	usage, err := ah.akus.RecordUsage(ctx, apiKey, string(c.Path()), string(c.Method()))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, dtos.AuthResult{
+			Status:       false,
+			ErrorMessage: err.Error(),
+		})
+		zap.L().Error("Usage bark! bark!", zap.Error(err))
+		return
+	}
 	c.JSON(http.StatusOK, dtos.AuthResult{
 		Status:       true,
 		ErrorMessage: "",

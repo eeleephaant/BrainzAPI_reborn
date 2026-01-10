@@ -2,11 +2,14 @@ package utils
 
 import (
 	"brainz/auth/internal/config"
+	"brainz/auth/internal/dtos"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -42,4 +45,23 @@ func GenerateSecretKey(length int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(key), nil
+}
+
+func ExtractDataFromKey(rawKey string) (*dtos.ExtractDataFromKey, error) {
+	op := "cripto.ExtractDataFromKey"
+	parts := strings.SplitN(rawKey, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("%s: invalid apiKey format", op)
+	}
+	cleanUuid := strings.TrimPrefix(parts[0], "brainz_")
+	id, err := uuid.Parse(cleanUuid)
+	if err != nil {
+		return nil, fmt.Errorf("%s: invalid apiKey ID: %w", op, err)
+	}
+	var extractData *dtos.ExtractDataFromKey = &dtos.ExtractDataFromKey{
+		ID:     id,
+		String: parts[1],
+	}
+	return extractData, nil
+
 }
