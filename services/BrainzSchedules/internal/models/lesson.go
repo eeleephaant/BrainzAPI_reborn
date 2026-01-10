@@ -12,7 +12,7 @@ type Lesson struct {
 	TeacherName   string
 	StartTime     time.Time
 	EndTime       time.Time
-	Num           int16
-	GroupID       *int64
-	InstitutionID *int64
+	Num           uint8
+	GroupID       uint
+	InstitutionID uint
 }

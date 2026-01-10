@@ -15,7 +15,7 @@ type LessonRepositoryInterface interface {
 	GetByID(ctx context.Context, id int64) (*models.Lesson, error)
 	Update(ctx context.Context, lesson *models.Lesson) error
 	Delete(ctx context.Context, id int64) error
-	ListForDayAndGroup(ctx context.Context, date time.Time, groupID int64) ([]*models.Lesson, error)
+	ListForDayAndInstitution(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error)
 }
 
 type LessonRepository struct {
@@ -24,6 +24,57 @@ type LessonRepository struct {
 
 func NewLessonRepository(db *pgxpool.Pool) *LessonRepository {
 	return &LessonRepository{db}
+}
+
+func (r *LessonRepository) ListForDayAndInstitution(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error) {
+	startOfDay := time.Date(
+		date.Year(), date.Month(), date.Day(),
+		0, 0, 0, 0,
+		date.Location(),
+	)
+
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	query, args, err := sq.
+		Select("id", "name", "cab_num", "teacher_name", "start_time", "end_time", "num", "group_id", "institution_id", "created_at", "updated_at", "deleted_at").
+		From("lessons").
+		Where(sq.And{
+			sq.GtOrEq{"start_time": startOfDay},
+			sq.Lt{"start_time": endOfDay},
+			sq.Eq{"institution_id": institutionID},
+		}).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var lessons []*models.Lesson
+	for rows.Next() {
+		var lesson models.Lesson
+		if err := rows.Scan(
+			&lesson.ID,
+			&lesson.Name,
+			&lesson.CabNum,
+			&lesson.TeacherName,
+			&lesson.StartTime,
+			&lesson.EndTime,
+			&lesson.Num,
+			&lesson.GroupID,
+			&lesson.InstitutionID,
+			&lesson.CreatedAt,
+			&lesson.UpdatedAt,
+			&lesson.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		lessons = append(lessons, &lesson)
+	}
+	return lessons, nil
 }
 
 // Create inserts a new lesson and returns its ID.

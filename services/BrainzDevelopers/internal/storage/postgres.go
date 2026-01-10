@@ -1,7 +1,7 @@
-package db
+package storage
 
 import (
-	"brainz-api/internal/config"
+	"brainz/developersapi/internal/config"
 	"context"
 	"fmt"
 	"log"
@@ -10,9 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var SchedulePool *pgxpool.Pool
-
-func ConnectPostgres(ctx context.Context, cfg *config.PostgresConfig) error {
+func ConnectPostgres(ctx context.Context, cfg *config.PostgresConfig) (pool *pgxpool.Pool, err error) {
 	dsnSched := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
 
@@ -31,9 +29,7 @@ func ConnectPostgres(ctx context.Context, cfg *config.PostgresConfig) error {
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		SchedulePool = devsPool
-		return nil
+		return devsPool, nil
 	}
-	return fmt.Errorf("failed to create pgx pool (devs) after 3 attempts: %v", err)
-
+	return nil, fmt.Errorf("failed to create pgx pool (devs) after 3 attempts: %v", err)
 }

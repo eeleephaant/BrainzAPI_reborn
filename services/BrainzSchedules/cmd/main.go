@@ -1,29 +1,24 @@
 package main
 
 import (
+	"brainz-api/internal/app"
 	"brainz-api/internal/config"
-	"brainz-api/internal/db"
-	"brainz-api/internal/middleware"
 	"context"
-	"net/http"
-	"time"
 
-	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/hertz-contrib/limiter"
+	"go.uber.org/zap"
 )
 
+func init() {
+	zap.ReplaceGlobals(zap.Must(zap.NewDevelopment()))
+}
+
 func main() {
-	ctx := context.Background()
 	cfg := config.MustLoad()
-	db.ConnectPostgres(ctx, &cfg.Postgres)
-	db.ConnectRedis(ctx, &cfg.Redis)
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	h := server.Default(server.WithHostPorts(":8080"))
-	h.NoHijackConnPool = true
-
-	h.Use(middleware.RecoveryMiddleware())
-	h.Use(limiter.AdaptiveLimit())
-	h.Use(middleware.AuthMiddleware("http://brainz-auth:8080/auth", &http.Client{Timeout: 3 * time.Second}))
-
-	h.Spin()
+	if err := app.Run(ctx, cfg); err != nil {
+		panic(err)
+	}
 }

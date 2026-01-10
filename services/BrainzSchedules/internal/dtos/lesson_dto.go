@@ -3,7 +3,7 @@ package dtos
 import "time"
 
 type LessonDto struct {
-	Id            uint      `json:"id"`
+	Id            int64     `json:"id"`
 	Name          string    `json:"name"`
 	CabNum        string    `json:"cab_num"`
 	TeacherName   string    `json:"teacher_name"`
@@ -11,6 +11,5 @@ type LessonDto struct {
 	EndTime       time.Time `json:"end_time"`
 	Num           uint8     `json:"num"`
 	GroupID       uint      `json:"group_id"`
-	GroupName     string    `json:"group_name"`
 	InstitutionID uint      `json:"institution_id"`
 }

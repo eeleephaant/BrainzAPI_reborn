@@ -16,6 +16,10 @@ type AuthHandler struct {
 	Ss *services.SessionService
 }
 
+func NewAuthHandler(us *services.UserService, ss *services.SessionService) *AuthHandler {
+	return &AuthHandler{Us: us, Ss: ss}
+}
+
 func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 	op := "handlers.Login"
 	loginData := dtos.LoginDto{}
