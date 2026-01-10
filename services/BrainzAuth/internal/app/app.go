@@ -21,8 +21,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	akr := repositories.NewApiKeysRepository(db.AuthPool)
 	aks := services.NewApiKeysService(akr)
+	akur := repositories.ApiKeyUsageRepository(db.AuthPool)
+	akus := services.NewApiKeysUsageService(akur)
 
-	router.Register(h, aks)
+	router.Register(h, aks, akus)
 
 	h.OnShutdown = append(h.OnShutdown, func(ctx context.Context) {
 		zap.L().Info("Stopping Server gracefully...")

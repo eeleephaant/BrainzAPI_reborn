@@ -26,8 +26,8 @@ func (akur *ApiKeyUsageRepository) Create(ctx context.Context, key *models.ApiKe
 	}
 	defer conn.Release()
 	queryBuilder := sq.Insert("api_key_usage").
-		Columns("id", "api_key_id", "endpoint", "usage_at", "response_code").
-		Values(key.ID, key.ApiKeyID, key.Endpoint, key.UsageAt, key.ResponseCode).
+		Columns("id", "api_key_id", "endpoint", "method", "usage_at", "response_code").
+		Values(key.ID, key.ApiKeyID, key.Endpoint, key.Method, key.UsageAt, key.ResponseCode).
 		Suffix(`
 		RETURNING
 			id, api_key_id, endpoint, usage_at, response_code
@@ -43,6 +43,7 @@ func (akur *ApiKeyUsageRepository) Create(ctx context.Context, key *models.ApiKe
 		&created.ID,
 		&created.ApiKeyID,
 		&created.Endpoint,
+		&created.Method,
 		&created.UsageAt,
 		&created.ResponseCode,
 	)

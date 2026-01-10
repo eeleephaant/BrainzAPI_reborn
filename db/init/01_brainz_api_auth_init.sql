@@ -40,6 +40,7 @@ CREATE TABLE api_key_usage (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     api_key_id    UUID NOT NULL REFERENCES api_key(id) ON UPDATE CASCADE ON DELETE SET NULL,
     endpoint      TEXT NOT NULL,
+    method        TEXT NOT NULL,
     usage_at      TIMESTAMPTZ NOT NULL,
     response_code TEXT NOT NULL
 );

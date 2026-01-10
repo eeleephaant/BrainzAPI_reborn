@@ -17,13 +17,14 @@ func NewApiKeysUsageService(akur *repositories.ApiKeyUsageRepository) *ApiKeyUsa
 	return &ApiKeyUsageService{akur: akur}
 }
 
-func (akus *ApiKeyUsageService) CreateUsage(ctx context.Context, APIKeyID uuid.UUID, endpoint string, responseCode string) (*models.ApiKeyUsage, error) {
+func (akus *ApiKeyUsageService) RecordUsage(ctx context.Context, APIKeyID uuid.UUID, endpoint string, responseCode string, method string) (*models.ApiKeyUsage, error) {
 	// op := "ApiKeyUsageService.CreateUsage"
 	uuid := uuid.New()
 	newAPIKeyUsage := models.ApiKeyUsage{
 		ID:           uuid,
 		ApiKeyID:     APIKeyID,
 		Endpoint:     endpoint,
+		Method:       method,
 		ResponseCode: responseCode,
 		UsageAt:      time.Now(),
 	}

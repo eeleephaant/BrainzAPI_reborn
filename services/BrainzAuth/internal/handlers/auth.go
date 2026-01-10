@@ -11,11 +11,15 @@ import (
 )
 
 type AuthHandler struct {
-	aks *services.ApiKeysService
+	aks  *services.ApiKeysService
+	akus *services.ApiKeyUsageService
 }
 
-func NewAuthHandler(aks *services.ApiKeysService) *AuthHandler {
-	return &AuthHandler{aks: aks}
+func NewAuthHandler(aks *services.ApiKeysService, akus *services.ApiKeyUsageService) *AuthHandler {
+	return &AuthHandler{
+		aks:  aks,
+		akus: akus,
+	}
 }
 
 func (ah *AuthHandler) Auth(ctx context.Context, c *app.RequestContext) {
