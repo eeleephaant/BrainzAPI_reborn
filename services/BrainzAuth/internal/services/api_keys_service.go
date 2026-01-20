@@ -33,7 +33,7 @@ func (aks *ApiKeysService) ValidateKey(ctx context.Context, raw_key string) erro
 		return fmt.Errorf("%s: apiKey is revoked or expired", op)
 	}
 
-	if !utils.CheckPassword(extractData.String, key.Salt, key.KeyHash) {
+	if !utils.CheckPassword(extractData.Secret, key.Salt, key.KeyHash) {
 		return fmt.Errorf("%s: invalid apiKey", op)
 	}
 
@@ -49,12 +49,12 @@ func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UU
 	}
 	salt := utils.GetRandomSalt()
 	hashedKey := utils.GetHashArgon2(rawKey, salt)
-	uuid := uuid.New()
+	newUUID := uuid.New()
 
-	displayedKey := fmt.Sprintf("brainz_%s:%s", uuid.String(), rawKey)
+	displayedKey := fmt.Sprintf("brainz_%s:%s", newUUID.String(), rawKey)
 
 	newKey := models.ApiKey{
-		ID:          uuid,
+		ID:          newUUID,
 		DeveloperID: developerId,
 		Name:        name,
 		ExpireAt:    expiresAt,

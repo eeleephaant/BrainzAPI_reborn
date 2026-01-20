@@ -6,7 +6,9 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -58,4 +60,23 @@ func GenerateSecretKey(length int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(key), nil
+}
+
+func ExtractDataFromToken(token string) (uuid.UUID, string, error) {
+	parts := strings.SplitN(token, ":", 2)
+	if len(parts) != 2 {
+		return uuid.Nil, "", fmt.Errorf("invalid token format")
+	}
+
+	sessionID, err := uuid.Parse(parts[0])
+	if err != nil {
+		return uuid.Nil, "", fmt.Errorf("invalid session id: %w", err)
+	}
+
+	secretKey := parts[1]
+	if secretKey == "" {
+		return uuid.Nil, "", fmt.Errorf("empty secret key")
+	}
+
+	return sessionID, secretKey, nil
 }

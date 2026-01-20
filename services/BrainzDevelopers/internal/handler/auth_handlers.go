@@ -66,7 +66,7 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	_, err := h.Us.RegistrateUser(ctx, &registerData)
+	ect, err := h.Us.RegistrateUser(ctx, &registerData)
 	if err != nil {
 		switch {
 		case errors.Is(err, entity.ErrEmailAlreadyExists):
@@ -81,5 +81,5 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 
-	c.JSON(201, map[string]string{"message": "User created, check your email to confirm it"})
+	c.JSON(201, map[string]string{"message": "User created, check your email to confirm it", "email_confirmation_token": ect.Token})
 }

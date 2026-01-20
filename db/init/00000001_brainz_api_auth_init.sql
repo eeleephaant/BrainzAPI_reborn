@@ -51,7 +51,7 @@ CREATE TABLE api_key_permission_grant (
     permission_id   INTEGER NOT NULL REFERENCES api_key_permission(id) ON DELETE RESTRICT,
     institution_id  INTEGER NULL,  -- NULL = глобальная, NOT NULL = для конкретной организации
     granted_at      TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT api_key_perm_unique
+    CONSTRAINT api_key_grant_unique
         UNIQUE (api_key_id, permission_id, institution_id)
 );
 

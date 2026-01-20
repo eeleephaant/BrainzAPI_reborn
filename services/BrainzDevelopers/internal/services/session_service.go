@@ -6,6 +6,7 @@ import (
 	"brainz/developersapi/internal/security"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,37 @@ type SessionService struct {
 
 func NewSessionService(sr *repository.SessionRepository) *SessionService {
 	return &SessionService{sr: sr}
+}
+
+func (ss *SessionService) ValidateToken(ctx context.Context, token string, ipAddr string) (*entity.Session, error) {
+	devUUID, tokenRaw, err := security.ExtractDataFromToken(token)
+	if err != nil {
+		return nil, fmt.Errorf("extract data from token: %w", err)
+	}
+
+	parts := strings.SplitN(token, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid api key format")
+	}
+
+	sessionID, err := uuid.Parse(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid api key")
+	}
+
+	session, err := ss.sr.GetByID(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("get session by ID: %w", err)
+	}
+
+	if time.Now().After(session.ExpiresAt) {
+		return nil, nil
+	}
+
+	if ipAddr != session.IpAddress {
+		return nil, fmt.Errorf("ip address mismatch")
+	}
+	return nil, nil
 }
 
 func (ss *SessionService) CreateNew(ctx context.Context, user *entity.DeveloperAccount, userAgent string, ipAddr string) (*entity.Session, *string, error) {

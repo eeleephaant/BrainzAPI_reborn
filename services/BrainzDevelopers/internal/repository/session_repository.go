@@ -142,6 +142,41 @@ func (r *SessionRepository) Update(ctx context.Context, session *entity.Session)
 	return updated, nil
 }
 
+func (r *SessionRepository) GetByID(ctx context.Context, sessionID uuid.UUID) (*entity.Session, error) {
+	conn, err := r.db.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("session repository: acquire: %w", err)
+	}
+	defer conn.Release()
+
+	queryBuilder := sq.
+		Select("id", "developer_id", "user_agent", "ip_address", "token_hash", "salt", "expires_at", "revoked_at").
+		From("developer_session").
+		Where(sq.Eq{"id": sessionID}).
+		PlaceholderFormat(sq.Dollar)
+
+	sqlStr, args, err := queryBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("session repository: build sql: %w", err)
+	}
+
+	row := conn.QueryRow(ctx, sqlStr, args...)
+	session := &entity.Session{}
+	if err := row.Scan(
+		&session.ID,
+		&session.DeveloperID,
+		&session.UserAgent,
+		&session.IpAddress,
+		&session.TokenHash,
+		&session.Salt,
+		&session.ExpiresAt,
+		&session.Revoked_at,
+	); err != nil {
+		return nil, fmt.Errorf("session repository: scan: %w", err)
+	}
+	return session, nil
+}
+
 func (r *SessionRepository) ValidateSessionKey(ctx context.Context, authRequest *models.SessionAuthData) (bool, error) {
 	conn, err := r.db.Acquire(ctx)
 	if err != nil {

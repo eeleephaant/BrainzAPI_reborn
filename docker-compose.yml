@@ -1,10 +1,16 @@
+name: brainz-api
+
 services:
   brainz-api:
     build: ./services/BrainzSchedules
     depends_on:
-      - db
-      - redis
-      - brainz-auth
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_started
+      brainz-auth:
+        condition: service_started
     ports:
       - '8080:8080'
     environment:
@@ -23,9 +29,13 @@ services:
       - appnet
 
   brainz-auth:
-    build: ./services/BrainzAuth
+    build:
+      context: .
+      dockerfile: ./services/BrainzAuth/Dockerfile
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+        restart: true
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -41,9 +51,15 @@ services:
       - appnet
 
   brainz-developers:
-    build: ./services/BrainzDevelopers
+    build:
+      context: .
+      dockerfile: ./services/BrainzDevelopers/Dockerfile
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+        restart: true
+      brainz-auth:
+        condition: service_started
     ports:
       - '3333:8080'
     environment:
@@ -62,7 +78,9 @@ services:
   brainz-parser:
     build: ./services/BrainzParser
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+        restart: true
     ports:
       - '4444:80'
     environment:
@@ -89,9 +107,7 @@ services:
     networks:
       - appnet
     healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U ${DB_USER} -d ${DB_LESSON_NAME} && pg_isready -U ${DB_USER} -d ${DB_DEVS_NAME}
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_LESSON_NAME} && pg_isready -U $${DB_USER} -d $${DB_DEVS_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -109,32 +125,32 @@ services:
           memory: 500m
           cpus: '0.5'
 
-  loki:
-    container_name: loki
-    image: grafana/loki:latest
-    ports:
-      - '3100:3100'
-    command: '-config.file=/etc/loki/local-config.yaml'
+# loki:
+#   container_name: loki
+#   image: grafana/loki:latest
+#   ports:
+#     - '3100:3100'
+#   command: '-config.file=/etc/loki/local-config.yaml'
 
-  promtail:
-    container_name: promtail
-    image: grafana/promtail:latest
-    restart: always
-    depends_on:
-      - loki
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./promtail:/etc/promtail
-    command: '-config.file=/etc/promtail/config.yml'
+# promtail:
+#   container_name: promtail
+#   image: grafana/promtail:latest
+#   restart: always
+#   depends_on:
+#     - loki
+#   volumes:
+#     - /var/run/docker.sock:/var/run/docker.sock
+#     - ./promtail:/etc/promtail
+#   command: '-config.file=/etc/promtail/config.yml'
 
-  grafana:
-    container_name: grafana
-    image: grafana/grafana:latest
-    restart: always
-    depends_on:
-      - loki
-    ports:
-      - '3000:3000'
+# grafana:
+#   container_name: grafana
+#   image: grafana/grafana:latest
+#   restart: always
+#   depends_on:
+#     - loki
+#   ports:
+#     - '3000:3000'
 
 volumes:
   postgres_data:

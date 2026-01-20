@@ -10,6 +10,7 @@ import (
 	"brainz/developersapi/internal/storage"
 	"context"
 
+	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"go.uber.org/zap"
 )
@@ -19,10 +20,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	psqlPool, err := storage.ConnectPostgres(ctx, &cfg.Postgres)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	security.LoadCfg(&cfg.Auth)
+
+	hc, err := client.NewClient()
+	if err != nil {
+		return err
+	}
 
 	sr := repository.NewSessionRepository(psqlPool)
 	ur := repository.NewUserRepository(psqlPool)
@@ -31,11 +37,13 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	ss := services.NewSessionService(sr)
 	es := services.NewEmailConfirmService(etr)
 	us := services.NewUserService(ur, es)
+	aks := services.NewApiKeysService(hc, "http://brainz-auth:8080", "")
 
 	ah := handler.NewAuthHandler(us, ss)
 	eh := handler.NewEmailHandler(es, us)
+	kmh := handler.NewKeysManagmentHandler(aks)
 
-	router.Register(h, ah, eh)
+	router.Register(h, ah, eh, kmh)
 
 	h.OnShutdown = append(h.OnShutdown, func(ctx context.Context) {
 		zap.L().Info("Stopping Server gracefully...")

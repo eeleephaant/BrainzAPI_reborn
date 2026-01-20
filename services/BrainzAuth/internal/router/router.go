@@ -11,7 +11,7 @@ func Register(h *server.Hertz, aks *services.ApiKeysService, akus *services.ApiK
 	ah := handlers.NewAuthHandler(aks, akus)
 	akmh := handlers.NewApiKeysManagmentHandler(aks)
 	h.GET("/auth", ah.Auth)
-	h.POST("/create_key", akmh.CreateApiKey)
-	h.DELETE("/remove_key", akmh.RemoveApiKey)
-	h.GET("/api_keys", akmh.GetDeveloperApiKeys)
+	h.POST("/key", akmh.CreateApiKey)
+	h.DELETE("/key", akmh.RemoveApiKey)
+	h.GET("/keys", akmh.GetDeveloperApiKeys)
 }
