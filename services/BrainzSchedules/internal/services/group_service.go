@@ -19,11 +19,11 @@ func (gs *GroupService) GetGroups(ctx context.Context) ([]dtos.GroupDto, error) 
 	if err != nil {
 		return nil, err
 	}
-	var groupDtos []dtos.GroupDto
+	var groupDTOs []dtos.GroupDto
 	for _, group := range groups {
-		groupDtos = append(groupDtos, dtos.GroupDto{Id: group.ID, Name: group.Name})
+		groupDTOs = append(groupDTOs, dtos.GroupDto{Id: group.ID, Name: group.Name})
 	}
-	return groupDtos, nil
+	return groupDTOs, nil
 }
 
 func (gs *GroupService) GetGroupsForInstitution(ctx context.Context, instID int64) ([]dtos.GroupDto, error) {

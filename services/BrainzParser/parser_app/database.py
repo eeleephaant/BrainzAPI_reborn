@@ -34,9 +34,9 @@ def write_lessons_to_bd(lessons: list[Lesson]) -> None:
         cursor.executemany(
             """
             INSERT INTO lessons (
-                start_time, end_time, num, name, teacher_name, cab_num, group_id, institution_id, created_at, updated_at
+                start_time, end_time, num, name, teacher_name, cab_num, group_id, institution_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (start_time, group_id, num, name, teacher_name)
             DO NOTHING
             """,
@@ -50,8 +50,6 @@ def write_lessons_to_bd(lessons: list[Lesson]) -> None:
                     lesson.cab_num,
                     group_ids[lesson.group.lower()],
                     lesson.institution_id,
-                    datetime.datetime.now(),
-                    datetime.datetime.now()
                 )
                 for lesson in valid_lessons
             ]

@@ -2,19 +2,22 @@ package handler
 
 import (
 	"brainz-api/internal/services"
+	"brainz/common/permissions"
 	"context"
 	"strconv"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"go.uber.org/zap"
 )
 
 type GroupHandler struct {
 	gs *services.GroupService
+	as *services.AuthService
 }
 
-func NewGroupHandler(gs *services.GroupService) *GroupHandler {
-	return &GroupHandler{gs}
+func NewGroupHandler(gs *services.GroupService, as *services.AuthService) *GroupHandler {
+	return &GroupHandler{gs, as}
 }
 
 func (gh *GroupHandler) GetGroupsForInst(ctx context.Context, c *app.RequestContext) {
@@ -33,6 +36,17 @@ func (gh *GroupHandler) GetGroupsForInst(ctx context.Context, c *app.RequestCont
 		})
 		return
 	}
+	institutionID := int64(intID)
+
+	isLegit, err := gh.as.Authorize(ctx, c, c.Request.Header.Get("X-Api-Key"), &permissions.Permission{
+		Action:        permissions.ActionRead,
+		InstitutionID: &institutionID,
+	})
+	if !isLegit {
+		c.Status(consts.StatusForbidden)
+		return
+	}
+
 	groups, err := gh.gs.GetGroupsForInstitution(ctx, int64(intID))
 	if err != nil {
 		c.JSON(500, map[string]string{
@@ -43,9 +57,7 @@ func (gh *GroupHandler) GetGroupsForInst(ctx context.Context, c *app.RequestCont
 	}
 
 	if len(groups) == 0 {
-		c.JSON(404, map[string]string{
-			"error": "groups not found",
-		})
+		c.Status(404)
 		return
 	}
 

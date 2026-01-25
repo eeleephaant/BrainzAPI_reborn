@@ -4,6 +4,7 @@ import (
 	"brainz/auth/internal/models"
 	"brainz/auth/internal/repositories"
 	"brainz/auth/internal/utils"
+	"brainz/common/permissions"
 	"context"
 	"fmt"
 	"time"
@@ -18,12 +19,49 @@ type ApiKeysService struct {
 func NewApiKeysService(akr *repositories.ApiKeysRepository) *ApiKeysService {
 	return &ApiKeysService{akr: akr}
 }
-func (aks *ApiKeysService) ValidateKey(ctx context.Context, raw_key string) error {
+
+func (aks *ApiKeysService) UserCanModifyKey(ctx context.Context, apiKey string, devUUID uuid.UUID) (bool, error) {
+	//op := "ApiKeysService.UserCanModifyKey"
+	apiKeyData, err := utils.ExtractDataFromKey(apiKey)
+	if err != nil {
+		return false, err
+	}
+	key, err := aks.akr.GetById(ctx, apiKeyData.ID)
+	if err != nil {
+		return false, err
+	}
+	if key.DeveloperID != devUUID {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (aks *ApiKeysService) CheckPermission(ctx context.Context, apiKey string, perm permissions.Permission) (bool, error) {
+	//op := "ApiKeysService.CheckPermission"
+	extractData, err := utils.ExtractDataFromKey(apiKey)
+	if err != nil {
+		return false, err
+	}
+
+	perms, err := aks.akr.GetPermissions(ctx, extractData.ID)
+	if err != nil {
+		return false, err
+	}
+	for _, granted := range perms {
+		if granted.Allows(perm) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (aks *ApiKeysService) ValidateKey(ctx context.Context, rawKey string, ipAddr string) error {
 	op := "ApiKeysService.ValidateKey"
-	extractData, err := utils.ExtractDataFromKey(raw_key)
+	extractData, err := utils.ExtractDataFromKey(rawKey)
 	if err != nil {
 		return err
 	}
+
 	key, err := aks.akr.GetById(ctx, extractData.ID)
 	if err != nil {
 		return err
@@ -37,7 +75,23 @@ func (aks *ApiKeysService) ValidateKey(ctx context.Context, raw_key string) erro
 		return fmt.Errorf("%s: invalid apiKey", op)
 	}
 
-	return nil
+	list, err := aks.akr.GetWhitelistedIPs(ctx, extractData.ID)
+	if err != nil {
+		return err
+	}
+
+	if len(list) == 0 {
+		return nil
+	}
+
+	for _, ip := range list {
+		if ip.String() == ipAddr {
+			return nil
+		}
+
+	}
+
+	return fmt.Errorf("%s: ip address %s is not whitelisted", op, ipAddr)
 }
 
 func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UUID, name string) (*models.ApiKey, *string, error) {
@@ -73,9 +127,14 @@ func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UU
 	return createdKey, &displayedKey, nil
 }
 
-func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, keyId uuid.UUID) error {
+func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, apiKey string) error {
 	op := "ApiKeysService.RemoveApiKey"
-	key, err := aks.akr.GetById(ctx, keyId)
+	keyUUID, err := uuid.Parse(apiKey)
+	if err != nil {
+		return fmt.Errorf("%s: failed to parse api key: %w", op, err)
+	}
+
+	key, err := aks.akr.GetById(ctx, keyUUID)
 	if err != nil {
 		return fmt.Errorf("%s: failed to get api key from db: %w", op, err)
 	}

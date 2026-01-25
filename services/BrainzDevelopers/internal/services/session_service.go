@@ -5,8 +5,8 @@ import (
 	"brainz/developersapi/internal/repository"
 	"brainz/developersapi/internal/security"
 	"context"
+	"crypto/subtle"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,22 +21,12 @@ func NewSessionService(sr *repository.SessionRepository) *SessionService {
 }
 
 func (ss *SessionService) ValidateToken(ctx context.Context, token string, ipAddr string) (*entity.Session, error) {
-	devUUID, tokenRaw, err := security.ExtractDataFromToken(token)
+	tokenUUID, tokenRaw, err := security.ExtractDataFromToken(token)
 	if err != nil {
 		return nil, fmt.Errorf("extract data from token: %w", err)
 	}
 
-	parts := strings.SplitN(token, ":", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid api key format")
-	}
-
-	sessionID, err := uuid.Parse(parts[0])
-	if err != nil {
-		return nil, fmt.Errorf("invalid api key")
-	}
-
-	session, err := ss.sr.GetByID(ctx, sessionID)
+	session, err := ss.sr.GetByID(ctx, tokenUUID)
 	if err != nil {
 		return nil, fmt.Errorf("get session by ID: %w", err)
 	}
@@ -48,7 +38,12 @@ func (ss *SessionService) ValidateToken(ctx context.Context, token string, ipAdd
 	if ipAddr != session.IpAddress {
 		return nil, fmt.Errorf("ip address mismatch")
 	}
-	return nil, nil
+
+	userKeyHash := security.GetHashArgon2(tokenRaw, session.Salt)
+	if subtle.ConstantTimeCompare(session.TokenHash, userKeyHash) != 1 {
+		return nil, fmt.Errorf("invalid api key")
+	}
+	return session, nil
 }
 
 func (ss *SessionService) CreateNew(ctx context.Context, user *entity.DeveloperAccount, userAgent string, ipAddr string) (*entity.Session, *string, error) {

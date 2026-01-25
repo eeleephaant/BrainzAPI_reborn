@@ -8,6 +8,7 @@ import (
 	"brainz-api/internal/services"
 	"brainz-api/internal/storage"
 	"context"
+	"net/url"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"go.uber.org/zap"
@@ -16,11 +17,16 @@ import (
 func Run(ctx context.Context, cfg *config.Config) error {
 	psqlPool, err := storage.ConnectPostgres(ctx, &cfg.Postgres)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	rc, err := storage.ConnectRedis(ctx, &cfg.Redis)
 	if err != nil {
-		panic(err)
+		return err
+	}
+
+	authUrl, err := url.Parse("http://brainz-auth:8080")
+	if err != nil {
+		return err
 	}
 
 	gr := repositories.NewGroupRepository(psqlPool)
@@ -31,9 +37,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	is := services.NewInstitutionService(ir)
 	gs := services.NewGroupService(gr)
 
-	sh := handler.NewScheduleHandler(rc, ls)
-	ih := handler.NewInstitutionHandler(is)
-	gh := handler.NewGroupHandler(gs)
+	as := services.NewAuthService(authUrl)
+
+	sh := handler.NewScheduleHandler(rc, ls, as)
+	ih := handler.NewInstitutionHandler(is, as)
+	gh := handler.NewGroupHandler(gs, as)
 
 	h := server.Default(server.WithHostPorts(":8080"))
 

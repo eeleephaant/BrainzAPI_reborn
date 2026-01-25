@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/bytedance/sonic"
 	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/google/uuid"
@@ -16,7 +17,7 @@ import (
 
 type ApiKeysService struct {
 	hc         *client.Client
-	authURL    string // URL Auth-сервиса, например: http://brainz-auth:8080
+	authURL    string
 	authHeader string
 }
 
@@ -29,7 +30,7 @@ func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerID uuid.UU
 		DeveloperID: developerID,
 		Name:        name,
 	}
-	bodyBytes, err := json.Marshal(reqBody)
+	bodyBytes, err := sonic.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
@@ -98,21 +99,42 @@ func (aks *ApiKeysService) GetApiKeys(ctx context.Context, developerID uuid.UUID
 	return apiKeys, nil
 }
 
-func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, apiKeyID string) error {
+func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, apiKey string, devID string) error {
 	req := protocol.AcquireRequest()
 	defer protocol.ReleaseRequest(req)
 	req.SetMethod(http.MethodDelete)
-	req.SetRequestURI(aks.authURL + "/remove_key/" + apiKeyID)
+	req.SetRequestURI(aks.authURL + "/remove_key")
 	if aks.authHeader != "" {
 		req.Header.Set("Authorization", aks.authHeader)
 	}
 
+	devUUID, err := uuid.Parse(devID)
+	if err != nil {
+		return err
+	}
+
+	body := dtos.ApiKeyRemoveDto{
+		Key:     apiKey,
+		DevUUID: devUUID,
+	}
+
+	data, err := sonic.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	req.SetBody(data)
+
 	resp := protocol.AcquireResponse()
 	defer protocol.ReleaseResponse(resp)
 
-	err := aks.hc.Do(ctx, req, resp)
+	err = aks.hc.Do(ctx, req, resp)
 	if err != nil {
 		return fmt.Errorf("request to auth service: %w", err)
+	}
+
+	if resp.StatusCode() == http.StatusForbidden {
+		return fmt.Errorf("access denied")
 	}
 
 	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent {

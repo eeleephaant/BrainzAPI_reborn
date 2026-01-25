@@ -8,6 +8,7 @@ import httpx
 
 from parser_app import ttsiigh_utils, utils, database
 from parser_app.logging_config import configure_logging
+
 from ttsiigh_utils import XLSXParser  # type: ignore
 
 app = FastAPI()
@@ -29,10 +30,18 @@ async def api_key_middleware(
             status_code=401,
             content={"status": False, "error_message": "Missing API key"}
         )
+    institution_id = request.query_params.get("institution_id")
+    if institution_id is None:
+        return JSONResponse(
+            status_code=400,
+            content={"status": False, "error_message": "Institution ID is required"}
+        )
+
+    needed_rights = {"perm": {"action": "write", "institution_id": int(institution_id)}}
 
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.get(AUTH_SERVICE_URL, params={"key": api_key}, timeout=5.0)
+            resp = await client.get(AUTH_SERVICE_URL, params={"key": api_key}, timeout=5.0, )
             data = resp.json()
         except httpx.RequestError:
             return JSONResponse(

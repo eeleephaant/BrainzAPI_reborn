@@ -2,6 +2,7 @@ package app
 
 import (
 	"brainz/auth/internal/config"
+	"brainz/auth/internal/handlers"
 	"brainz/auth/internal/repositories"
 	"brainz/auth/internal/router"
 	"brainz/auth/internal/services"
@@ -28,7 +29,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	akur := repositories.NewApiKeyUsageRepository(psqlPool)
 	akus := services.NewApiKeysUsageService(akur, akr)
 
-	router.Register(h, aks, akus)
+	ah := handlers.NewAuthHandler(aks, akus)
+	akmh := handlers.NewApiKeysManagementHandler(aks)
+
+	router.Register(h, ah, akmh)
 
 	h.OnShutdown = append(h.OnShutdown, func(ctx context.Context) {
 		zap.L().Info("Stopping Server gracefully...")

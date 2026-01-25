@@ -11,6 +11,6 @@ func Register(h *server.Hertz, ah *handler.AuthHandler, eh *handler.EmailHandler
 	h.POST("/login", ah.Login)
 	h.POST("/confirm-email", eh.GetConfirmEmailCode)
 	h.GET("/keys", kmh.GetApiKeys)
+	h.POST("/key", kmh.CreateApiKey)
 	h.DELETE("/key", nil)
-
 }

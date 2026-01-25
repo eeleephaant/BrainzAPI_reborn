@@ -4,6 +4,7 @@ import (
 	"brainz-api/internal/models"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -15,6 +16,7 @@ type LessonRepositoryInterface interface {
 	GetByID(ctx context.Context, id int64) (*models.Lesson, error)
 	Update(ctx context.Context, lesson *models.Lesson) error
 	Delete(ctx context.Context, id int64) error
+	BatchCreate(ctx context.Context, lessons []*models.Lesson) ([]int64, error)
 	ListForDayAndInstitution(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error)
 }
 
@@ -101,6 +103,66 @@ func (r *LessonRepository) Create(ctx context.Context, lesson *models.Lesson) (i
 		return 0, err
 	}
 	return id, nil
+}
+
+func (r *LessonRepository) BatchCreate(ctx context.Context, lessons []*models.Lesson) ([]int64, error) {
+	if len(lessons) == 0 {
+		return nil, nil
+	}
+
+	builder := sq.
+		Insert("lessons").
+		PlaceholderFormat(sq.Dollar).
+		Columns(
+			"name", "cab_num", "teacher_name",
+			"start_time", "end_time", "num",
+			"group_id", "institution_id",
+		).
+		Suffix("RETURNING id")
+
+	for _, lesson := range lessons {
+		builder = builder.Values(
+			lesson.Name,
+			lesson.CabNum,
+			lesson.TeacherName,
+			lesson.StartTime,
+			lesson.EndTime,
+			lesson.Num,
+			lesson.GroupID,
+			lesson.InstitutionID,
+		)
+	}
+
+	query, args, err := builder.ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0, len(lessons))
+
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(ids) != len(lessons) {
+		return nil, fmt.Errorf("expected %d ids, got %d", len(lessons), len(ids))
+	}
+
+	return ids, nil
 }
 
 // GetByID returns a lesson by its ID.

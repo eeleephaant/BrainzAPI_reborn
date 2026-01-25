@@ -13,8 +13,13 @@ func Register(ctx context.Context,
 	ih *handler.InstitutionHandler,
 	gh *handler.GroupHandler,
 ) {
+	// REST
 	h.GET("/lessons", sh.GetLessons)
+	h.POST("/lessons", sh.AddLessons)
 	h.GET("/institution", ih.GetInstitutions)
+	h.POST("/institution", ih.CreateInstitution)
 	h.GET("/group", gh.GetGroupsForInst)
-	h.GET("/ws/info_stream", handler.InfoStreamHandler)
+
+	// WEB-SOCKET
+	h.GET("/info-stream", handler.InfoStreamHandler)
 }

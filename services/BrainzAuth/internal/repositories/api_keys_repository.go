@@ -2,8 +2,10 @@ package repositories
 
 import (
 	"brainz/auth/internal/models"
+	"brainz/common/permissions"
 	"context"
 	"fmt"
+	"net/netip"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
@@ -17,6 +19,96 @@ type ApiKeysRepository struct {
 
 func NewApiKeysRepository(db *pgxpool.Pool) *ApiKeysRepository {
 	return &ApiKeysRepository{db}
+}
+
+func (akr *ApiKeysRepository) GetWhitelistedIPs(ctx context.Context, keyID uuid.UUID) ([]netip.Addr, error) {
+	op := "ApiKeysRepository.GetWhitelistedIPs"
+	conn, err := akr.db.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: acquire connection: %w", op, err)
+	}
+	defer conn.Release()
+	queryBuilder := sq.Select("ip_address").
+		From("api_key_whitelist").
+		Where(sq.Eq{"api_key_id": keyID}).
+		PlaceholderFormat(sq.Dollar)
+	sqlQuery, args, err := queryBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%s: build query: %w", op, err)
+	}
+	rows, err := conn.Query(ctx, sqlQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: execute query: %w", op, err)
+	}
+	defer rows.Close()
+	var ips []netip.Addr
+	for rows.Next() {
+		var ip netip.Addr
+		if err := rows.Scan(&ip); err != nil {
+			return nil, fmt.Errorf("%s: scan: %w", op, err)
+		}
+		ips = append(ips, ip)
+	}
+	return ips, nil
+}
+
+func (akr *ApiKeysRepository) GetPermissions(
+	ctx context.Context,
+	keyID uuid.UUID,
+) ([]permissions.Permission, error) {
+	const op = "ApiKeysRepository.GetPermissions"
+
+	conn, err := akr.db.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: acquire connection: %w", op, err)
+	}
+	defer conn.Release()
+
+	queryBuilder := sq.
+		Select(
+			"p.title",
+			"g.institution_id",
+		).
+		From("api_key_permission_grant g").
+		Join("api_key_permission p ON p.id = g.permission_id").
+		Where(sq.Eq{"g.api_key_id": keyID}).
+		OrderBy("p.title", "g.institution_id").
+		PlaceholderFormat(sq.Dollar)
+
+	sqlQuery, args, err := queryBuilder.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%s: build query: %w", op, err)
+	}
+
+	rows, err := conn.Query(ctx, sqlQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: execute query: %w", op, err)
+	}
+	defer rows.Close()
+
+	var result []permissions.Permission
+
+	for rows.Next() {
+		var (
+			title         string
+			institutionID *int64
+		)
+
+		if err := rows.Scan(&title, &institutionID); err != nil {
+			return nil, fmt.Errorf("%s: scan row: %w", op, err)
+		}
+
+		result = append(result, permissions.Permission{
+			Action:        permissions.Action(title),
+			InstitutionID: institutionID,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: iterate rows: %w", op, err)
+	}
+
+	return result, nil
 }
 
 func (akr *ApiKeysRepository) GetAllByDeveloperId(ctx context.Context, developerId uuid.UUID) ([]*models.ApiKey, error) {
