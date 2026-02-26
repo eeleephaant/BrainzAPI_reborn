@@ -11,14 +11,31 @@ import (
 	"go.uber.org/zap"
 )
 
-type AuthHandler struct {
-	Us *services.UserService
-	Ss *services.SessionService
+// AuthUserService is the subset of UserService used by AuthHandler (for testing).
+type AuthUserService interface {
+	Authenticate(ctx context.Context, email, password string) (*entity.DeveloperAccount, error)
+	RegistrateUser(ctx context.Context, registerDto *dtos.RegisterDto) (*entity.EmailConfirmationToken, error)
 }
 
-func NewAuthHandler(us *services.UserService, ss *services.SessionService) *AuthHandler {
+// AuthSessionService is the subset of SessionService used by AuthHandler (for testing).
+type AuthSessionService interface {
+	CreateNew(ctx context.Context, user *entity.DeveloperAccount, userAgent string, ipAddr string) (*entity.Session, *string, error)
+}
+
+type AuthHandler struct {
+	Us AuthUserService
+	Ss AuthSessionService
+}
+
+func NewAuthHandler(us AuthUserService, ss AuthSessionService) *AuthHandler {
 	return &AuthHandler{Us: us, Ss: ss}
 }
+
+// Ensure concrete types satisfy interfaces.
+var (
+	_ AuthUserService    = (*services.UserService)(nil)
+	_ AuthSessionService = (*services.SessionService)(nil)
+)
 
 func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 	op := "handlers.Login"

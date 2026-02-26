@@ -63,5 +63,4 @@ func ExtractDataFromKey(rawKey string) (*dtos.ApiKeyData, error) {
 		Secret: parts[1],
 	}
 	return extractData, nil
-
 }

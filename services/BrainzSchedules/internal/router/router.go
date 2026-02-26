@@ -2,6 +2,7 @@ package router
 
 import (
 	"brainz-api/internal/handler"
+	"brainz-api/internal/middleware"
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -13,6 +14,8 @@ func Register(ctx context.Context,
 	ih *handler.InstitutionHandler,
 	gh *handler.GroupHandler,
 ) {
+	h.Use(middleware.RecoveryMiddleware())
+
 	// REST
 	h.GET("/lessons", sh.GetLessons)
 	h.POST("/lessons", sh.AddLessons)

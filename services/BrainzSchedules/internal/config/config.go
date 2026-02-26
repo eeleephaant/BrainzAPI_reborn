@@ -6,10 +6,11 @@ import (
 
 type (
 	Config struct {
-		Postgres PostgresConfig `env-prefix:"DB_"`
-		Auth     AuthConfig
-		Redis    RedisConfig `env-prefix:"REDIS_"`
-		App      AppConfig   `env-prefix:"APP_"`
+		Postgres       PostgresConfig `env-prefix:"DB_"`
+		Auth           AuthConfig
+		AuthServiceURL string `env:"AUTH_SERVICE_URL"`
+		Redis          RedisConfig `env-prefix:"REDIS_"`
+		App            AppConfig   `env-prefix:"APP_"`
 	}
 
 	AppConfig struct {
@@ -37,7 +38,7 @@ type (
 	RedisConfig struct {
 		Host     string `env:"HOST,required"`
 		Port     string `env:"PORT,required"`
-		Password string `env:"PASSWORD,required"`
+		Password string `env:"PASSWORD"`
 	}
 )
 

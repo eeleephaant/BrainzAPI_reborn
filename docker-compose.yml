@@ -21,7 +21,8 @@ services:
       DB_NAME: ${DB_LESSON_NAME}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://brainz-auth:8080}
       APP_PORT: 8000
       APP_ADDRESS: localhost
       APP_ENV: development

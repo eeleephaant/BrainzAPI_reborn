@@ -9,16 +9,16 @@ import (
 	"go.uber.org/zap"
 )
 
-type KeysManagmentHandler struct {
+type KeysManagementHandler struct {
 	ks *services.ApiKeysService
 	ss *services.SessionService
 }
 
-func NewKeysManagmentHandler(ks *services.ApiKeysService) *KeysManagmentHandler {
-	return &KeysManagmentHandler{ks: ks}
+func NewKeysManagementHandler(ks *services.ApiKeysService, ss *services.SessionService) *KeysManagementHandler {
+	return &KeysManagementHandler{ks: ks, ss: ss}
 }
 
-func (k *KeysManagmentHandler) GetApiKeys(ctx context.Context, c *app.RequestContext) {
+func (k *KeysManagementHandler) GetApiKeys(ctx context.Context, c *app.RequestContext) {
 	sessionToken := c.Request.Header.Get("X-Session-Token")
 	session, err := k.ss.ValidateToken(ctx, sessionToken, c.ClientIP())
 	if err != nil {
@@ -35,9 +35,9 @@ func (k *KeysManagmentHandler) GetApiKeys(ctx context.Context, c *app.RequestCon
 	c.JSON(200, keys)
 }
 
-func (k *KeysManagmentHandler) CreateApiKey(ctx context.Context, c *app.RequestContext) {
+func (k *KeysManagementHandler) CreateApiKey(ctx context.Context, c *app.RequestContext) {
 	apiCreateRequest := dtos.ApiKeyCreateDto{}
-	err := c.BindAndValidate(apiCreateRequest)
+	err := c.BindAndValidate(&apiCreateRequest)
 	if err != nil {
 		c.JSON(400, map[string]string{"error": "invalid request"})
 		return
@@ -50,7 +50,7 @@ func (k *KeysManagmentHandler) CreateApiKey(ctx context.Context, c *app.RequestC
 	c.JSON(201, newKey)
 }
 
-func (k *KeysManagmentHandler) DeleteApiKey(ctx context.Context, c *app.RequestContext) {
+func (k *KeysManagementHandler) DeleteApiKey(ctx context.Context, c *app.RequestContext) {
 	sessionToken := c.Request.Header.Get("X-Session-Token")
 	apiKeyStr := c.Query("api_key")
 	session, err := k.ss.ValidateToken(ctx, sessionToken, c.ClientIP())

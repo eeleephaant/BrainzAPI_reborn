@@ -8,6 +8,7 @@ import (
 	"brainz-api/internal/services"
 	"brainz-api/internal/storage"
 	"context"
+	"fmt"
 	"net/url"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -24,20 +25,24 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	authUrl, err := url.Parse("http://brainz-auth:8080")
+	authServiceURL := cfg.AuthServiceURL
+	if authServiceURL == "" {
+		authServiceURL = "http://brainz-auth:8080"
+	}
+	authURL, err := url.Parse(authServiceURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse AUTH_SERVICE_URL: %w", err)
 	}
 
 	gr := repositories.NewGroupRepository(psqlPool)
 	ir := repositories.NewInstitutionRepository(psqlPool)
 	lr := repositories.NewLessonRepository(psqlPool)
 
-	ls := services.NewLessonService(lr)
+	ls := services.NewLessonService(lr, gr)
 	is := services.NewInstitutionService(ir)
 	gs := services.NewGroupService(gr)
 
-	as := services.NewAuthService(authUrl)
+	as := services.NewAuthService(authURL)
 
 	sh := handler.NewScheduleHandler(rc, ls, as)
 	ih := handler.NewInstitutionHandler(is, as)

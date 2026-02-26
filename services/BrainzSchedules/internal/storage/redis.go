@@ -4,7 +4,7 @@ import (
 	"brainz-api/internal/config"
 	"brainz-api/internal/models"
 	"context"
-	"log"
+	"fmt"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -12,14 +12,13 @@ import (
 func ConnectRedis(ctx context.Context, cfg *config.RedisConfig) (*redis.Client, error) {
 	rc := redis.NewClient(&redis.Options{
 		Addr:     cfg.Host + ":" + cfg.Port,
-		Password: "",
+		Password: cfg.Password,
 		DB:       0,
 	})
 
 	_, err := rc.Ping(ctx).Result()
 	if err != nil {
-		log.Fatal("failed to connect to Redis:", err)
-		return nil, err
+		return nil, fmt.Errorf("redis ping: %w", err)
 	}
 	return rc, nil
 }

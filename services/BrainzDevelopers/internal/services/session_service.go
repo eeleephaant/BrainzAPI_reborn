@@ -2,7 +2,6 @@ package services
 
 import (
 	"brainz/developersapi/internal/entity"
-	"brainz/developersapi/internal/repository"
 	"brainz/developersapi/internal/security"
 	"context"
 	"crypto/subtle"
@@ -12,11 +11,17 @@ import (
 	"github.com/google/uuid"
 )
 
-type SessionService struct {
-	sr *repository.SessionRepository
+// SessionRepository defines persistence for sessions (for testing and DI).
+type SessionRepository interface {
+	GetByID(ctx context.Context, sessionID uuid.UUID) (*entity.Session, error)
+	CreateSession(ctx context.Context, s *entity.Session) (*entity.Session, error)
 }
 
-func NewSessionService(sr *repository.SessionRepository) *SessionService {
+type SessionService struct {
+	sr SessionRepository
+}
+
+func NewSessionService(sr SessionRepository) *SessionService {
 	return &SessionService{sr: sr}
 }
 

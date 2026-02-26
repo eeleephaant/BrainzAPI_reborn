@@ -3,7 +3,6 @@ package services
 import (
 	"brainz/developersapi/internal/dtos"
 	"brainz/developersapi/internal/entity"
-	"brainz/developersapi/internal/repository"
 	"brainz/developersapi/internal/security"
 	"context"
 	"time"
@@ -12,12 +11,25 @@ import (
 	"go.uber.org/zap"
 )
 
-type UserService struct {
-	ur  *repository.UserRepository
-	ecs *EmailService
+// UserRepository defines persistence for developer accounts (for testing and DI).
+type UserRepository interface {
+	GetByEmail(ctx context.Context, email string) (*entity.DeveloperAccount, error)
+	GetById(ctx context.Context, devId uuid.UUID) (*entity.DeveloperAccount, error)
+	Create(ctx context.Context, developer_account *entity.DeveloperAccount) (*entity.DeveloperAccount, error)
+	Update(ctx context.Context, user *entity.DeveloperAccount) (*entity.DeveloperAccount, error)
 }
 
-func NewUserService(ur *repository.UserRepository, ecs *EmailService) *UserService {
+// EmailConfirmationSender sends email confirmation (for testing and DI).
+type EmailConfirmationSender interface {
+	SendConfirmationEmail(ctx context.Context, developerId uuid.UUID) (*entity.EmailConfirmationToken, error)
+}
+
+type UserService struct {
+	ur  UserRepository
+	ecs EmailConfirmationSender
+}
+
+func NewUserService(ur UserRepository, ecs EmailConfirmationSender) *UserService {
 	return &UserService{ur: ur, ecs: ecs}
 }
 
