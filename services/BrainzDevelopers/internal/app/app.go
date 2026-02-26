@@ -9,6 +9,7 @@ import (
 	"brainz/developersapi/internal/services"
 	"brainz/developersapi/internal/storage"
 	"context"
+	"fmt"
 
 	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -16,7 +17,8 @@ import (
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
-	h := server.Default(server.WithHostPorts(":8080"))
+	hostPort := fmt.Sprintf("%s:%d", cfg.App.Address, cfg.App.Port)
+	h := server.Default(server.WithHostPorts(hostPort))
 
 	psqlPool, err := storage.ConnectPostgres(ctx, &cfg.Postgres)
 	if err != nil {

@@ -9,13 +9,15 @@ import (
 	"brainz/auth/internal/storage"
 	"brainz/auth/internal/utils"
 	"context"
+	"fmt"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"go.uber.org/zap"
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
-	h := server.Default(server.WithHostPorts(":8080"))
+	hostPort := fmt.Sprintf("%s:%d", cfg.App.Address, cfg.App.Port)
+	h := server.Default(server.WithHostPorts(hostPort))
 
 	psqlPool, err := storage.ConnectPostgres(ctx, &cfg.Postgres)
 	if err != nil {

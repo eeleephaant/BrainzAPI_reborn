@@ -48,7 +48,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	ih := handler.NewInstitutionHandler(is, as)
 	gh := handler.NewGroupHandler(gs, as)
 
-	h := server.Default(server.WithHostPorts(":8080"))
+	hostPort := fmt.Sprintf("%s:%d", cfg.App.Address, cfg.App.Port)
+	h := server.Default(server.WithHostPorts(hostPort))
 
 	router.Register(ctx, h, sh, ih, gh)
 
