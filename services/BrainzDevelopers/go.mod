@@ -50,6 +50,7 @@ require (
 	github.com/go-playground/validator/v10 v10.28.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/google/uuid v1.6.0
+	github.com/hertz-contrib/cors v0.1.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect

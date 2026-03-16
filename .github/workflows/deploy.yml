@@ -48,7 +48,7 @@ jobs:
           docker compose --env-file .env -f docker-compose.deploy.yml up -d --build
           docker image prune -f
           EOF
-          
+
       - name: 📬 Уведомление в Telegram (Успех)
         if: success()
         uses: appleboy/telegram-action@master
@@ -57,25 +57,21 @@ jobs:
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
             ✅ Деплой Brainz API прошёл успешно!
-      
-            ┌───────────── Проект ─────────────┐
-            │ Репозиторий • ${{ github.repository }}
-            │ Ветка       • ${{ github.ref_name }}
-            └───────────────────────────────────┘
-      
-            ┌───────────── Коммит ─────────────┐
-            │ ${{ env.COMMIT_TITLE || 'Без названия' }}
-            │ ${{ github.sha }}
-            └───────────────────────────────────┘
-      
+
+            Репозиторий • ${{ github.repository }}
+            Ветка • ${{ github.ref_name }}
+
+            Коммит
+            ${{ env.COMMIT_TITLE || 'Без названия' }}
+
             👤 Автор:        @${{ github.actor }}
             🌍 Окружение:    Production
             🔗 Ссылка:       https://pentapulse.ru/brainz/api/v2/main/
             📦 Статус:       Успешно развёрнуто
-      
+
             🕒 Время:        ${{ github.event.head_commit.timestamp || 'сейчас' }}
             🔍 Логи:         ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-  
+
       - name: 📬 Уведомление в Telegram (Ошибка)
         if: failure()
         uses: appleboy/telegram-action@master
@@ -84,19 +80,16 @@ jobs:
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
            🔥 Деплой Brainz API упал!
-    
-            ┌───────────── Проект ─────────────┐
-            │ Репозиторий • ${{ github.repository }}
-            │ Ветка       • ${{ github.ref_name }}
-            └───────────────────────────────────┘
-      
-            ┌───────────── Коммит ─────────────┐
-            │ ${{ env.COMMIT_TITLE || 'Без названия' }}
-            │ ${{ github.sha }}
-            └───────────────────────────────────┘
-      
+
+            Репозиторий • ${{ github.repository }}
+            Ветка • ${{ github.ref_name }}
+
+            Коммит
+            ${{ env.COMMIT_TITLE || 'Без названия' }}
+            ${{ github.sha }}
+
             👤 Автор:     @${{ github.actor }}
             ⚠️ Статус:    Ошибка при деплое
             🔍 Логи:      ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      
+
             Срочно проверьте, что случилось!

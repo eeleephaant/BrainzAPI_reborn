@@ -13,12 +13,16 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/hertz-contrib/cors"
 	"go.uber.org/zap"
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
 	hostPort := fmt.Sprintf("%s:%d", cfg.App.Address, cfg.App.Port)
 	h := server.Default(server.WithHostPorts(hostPort))
+
+	// Enable CORS for browser clients (temporarily allow all origins).
+	h.Use(cors.Default())
 
 	psqlPool, err := storage.ConnectPostgres(ctx, &cfg.Postgres)
 	if err != nil {
