@@ -2,7 +2,9 @@ name: brainz-api
 
 services:
   brainz-auth:
-    image: ghcr.io/${IMAGE_NAMESPACE}/brainz-auth:${IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: ./services/BrainzAuth/Dockerfile
     restart: unless-stopped
     depends_on:
       db:
@@ -40,7 +42,9 @@ services:
       - appnet
 
   brainz-developers:
-    image: ghcr.io/${IMAGE_NAMESPACE}/brainz-developers:${IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: ./services/BrainzDevelopers/Dockerfile
     restart: unless-stopped
     depends_on:
       db:
