@@ -15,14 +15,60 @@ import (
 	"go.uber.org/zap"
 )
 
+type ScheduleLessonService interface {
+	DeleteLesson(ctx context.Context, lessonID int) error
+	AddLessons(ctx context.Context, dto dtos.LessonsCreateDTO) error
+	GetForDateAndInstitution(ctx context.Context, date time.Time, institutionID uint64) ([]dtos.LessonDto, error)
+}
+
+type ScheduleAuthService interface {
+	Authorize(ctx context.Context, reqCtx *app.RequestContext, apiKey string, perm *permissions.Permission) (bool, error)
+}
+
 type ScheduleHandler struct {
 	rc *redis.Client
-	ls *services.LessonService
-	as *services.AuthService
+	ls ScheduleLessonService
+	as ScheduleAuthService
 }
 
 func NewScheduleHandler(rc *redis.Client, ls *services.LessonService, as *services.AuthService) *ScheduleHandler {
 	return &ScheduleHandler{rc, ls, as}
+}
+
+var (
+	_ ScheduleLessonService = (*services.LessonService)(nil)
+	_ ScheduleAuthService   = (*services.AuthService)(nil)
+)
+
+func (sh *ScheduleHandler) DeleteLesson(ctx context.Context, c *app.RequestContext) {
+	lessonIDStr := c.Query("lesson_id")
+	lessonID, err := strconv.ParseInt(lessonIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid lesson_id format",
+		})
+		return
+	}
+	isLegit, err := sh.as.Authorize(ctx, c, c.Request.Header.Get("X-Api-Key"), &permissions.Permission{Action: permissions.ActionWrite, InstitutionID: &lessonID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "internal server error",
+		})
+		return
+	}
+
+	if !isLegit {
+		c.Status(http.StatusForbidden)
+		return
+	}
+	err = sh.ls.DeleteLesson(ctx, int(lessonID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "internal server error",
+		})
+		return
+	}
+	c.Status(http.StatusOK)
 }
 
 func (sh *ScheduleHandler) AddLessons(ctx context.Context, c *app.RequestContext) {

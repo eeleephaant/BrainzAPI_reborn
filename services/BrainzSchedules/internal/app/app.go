@@ -12,6 +12,7 @@ import (
 	"net/url"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -20,9 +21,18 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	rc, err := storage.ConnectRedis(ctx, &cfg.Redis)
-	if err != nil {
-		return err
+
+	var rc *redis.Client
+	if cfg.Redis.Host != "" {
+		connected, err := storage.ConnectRedis(ctx, &cfg.Redis)
+		if err != nil {
+			zap.L().Warn("Redis unavailable, running without Redis (info_stream push disabled)", zap.Error(err))
+			rc = nil
+		} else {
+			rc = connected
+		}
+	} else {
+		zap.L().Info("Redis host empty, running without Redis (info_stream push disabled)")
 	}
 
 	authServiceURL := cfg.AuthServiceURL
@@ -53,12 +63,16 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	router.Register(ctx, h, sh, ih, gh)
 
-	go storage.RedisEventsListener(ctx, rc)
+	if rc != nil {
+		go storage.RedisEventsListener(ctx, rc)
+	}
 
 	h.OnShutdown = append(h.OnShutdown, func(ctx context.Context) {
 		zap.L().Info("Stopping Server gracefully...")
 		psqlPool.Close()
-		rc.Close()
+		if rc != nil {
+			rc.Close()
+		}
 		<-ctx.Done()
 		zap.L().Info("Server Stopped gracefully!")
 	})

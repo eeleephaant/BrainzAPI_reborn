@@ -11,14 +11,28 @@ import (
 	"go.uber.org/zap"
 )
 
+type InstitutionWriteService interface {
+	CreateNew(ctx context.Context, instDto dtos.InstitutionCreateDto) (int64, error)
+	GetInstitutions(ctx context.Context) ([]dtos.InstitutionDto, error)
+}
+
+type InstitutionAuthService interface {
+	Authorize(ctx context.Context, reqCtx *app.RequestContext, apiKey string, perm *permissions.Permission) (bool, error)
+}
+
 type InstitutionHandler struct {
-	is *services.InstitutionService
-	as *services.AuthService
+	is InstitutionWriteService
+	as InstitutionAuthService
 }
 
 func NewInstitutionHandler(is *services.InstitutionService, as *services.AuthService) *InstitutionHandler {
 	return &InstitutionHandler{is, as}
 }
+
+var (
+	_ InstitutionWriteService = (*services.InstitutionService)(nil)
+	_ InstitutionAuthService  = (*services.AuthService)(nil)
+)
 
 func (ih *InstitutionHandler) CreateInstitution(ctx context.Context, c *app.RequestContext) {
 	isLegit, err := ih.as.Authorize(ctx, c, c.Request.Header.Get("X-Api-Key"), &permissions.Permission{Action: permissions.ActionAdmin, InstitutionID: nil})

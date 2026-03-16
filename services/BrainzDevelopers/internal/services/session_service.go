@@ -37,7 +37,7 @@ func (ss *SessionService) ValidateToken(ctx context.Context, token string, ipAdd
 	}
 
 	if time.Now().After(session.ExpiresAt) {
-		return nil, nil
+		return nil, fmt.Errorf("session expired")
 	}
 
 	if ipAddr != session.IpAddress {

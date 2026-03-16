@@ -19,6 +19,6 @@ func main() {
 	defer cancel()
 
 	if err := app.Run(ctx, cfg); err != nil {
-		panic(err)
+		zap.L().Fatal("service stopped with error", zap.Error(err))
 	}
 }

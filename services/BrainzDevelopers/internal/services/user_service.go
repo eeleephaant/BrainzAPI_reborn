@@ -33,6 +33,10 @@ func NewUserService(ur UserRepository, ecs EmailConfirmationSender) *UserService
 	return &UserService{ur: ur, ecs: ecs}
 }
 
+func (us *UserService) GetById(ctx context.Context, devId uuid.UUID) (*entity.DeveloperAccount, error) {
+	return us.ur.GetById(ctx, devId)
+}
+
 func (us *UserService) Authenticate(ctx context.Context, email string, password string) (*entity.DeveloperAccount, error) {
 	account, err := us.ur.GetByEmail(ctx, email)
 	if err != nil {
@@ -85,15 +89,14 @@ func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.Reg
 	}
 
 	ect, err := us.ecs.SendConfirmationEmail(ctx, acc.ID)
-
-	zap.L().Debug("Sent confirmation email",
-		zap.String("token", ect.Token),
-		zap.String("code", ect.NumbericCode),
-	)
-
 	if err != nil {
 		return nil, err
 	}
+
+	// Не логируем сам токен/код, чтобы не светить секреты в логах.
+	zap.L().Debug("Sent confirmation email",
+		zap.String("developer_id", acc.ID.String()),
+	)
 
 	return ect, nil
 }

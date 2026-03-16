@@ -45,6 +45,7 @@ func (r *LessonRepository) ListForDayAndInstitution(ctx context.Context, date ti
 			sq.Lt{"start_time": endOfDay},
 			sq.Eq{"institution_id": institutionID},
 		}).
+		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return nil, err

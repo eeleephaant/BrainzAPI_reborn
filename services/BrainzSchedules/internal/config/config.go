@@ -36,8 +36,8 @@ type (
 	}
 
 	RedisConfig struct {
-		Host     string `env:"HOST,required"`
-		Port     string `env:"PORT,required"`
+		Host     string `env:"HOST" env-default:""`
+		Port     string `env:"PORT" env-default:"6379"`
 		Password string `env:"PASSWORD"`
 	}
 )

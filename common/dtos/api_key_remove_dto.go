@@ -1,8 +1,14 @@
 package dtos
 
-import "github.com/google/uuid"
+import (
+	"brainz/common/permissions"
+
+	"github.com/google/uuid"
+)
 
 type ApiKeyCreateDto struct {
-	Name        string    `json:"api_key,required"`
-	DeveloperID uuid.UUID `json:"developer_id,required"`
+	ApiKeyName  string                   `json:"api_key_name,required"`
+	DevUUID     uuid.UUID                `json:"dev_uuid,required"`
+	Permissions []permissions.Permission `json:"permissions"`
+	IPWhitelist []string                 `json:"ip_whitelist"`
 }

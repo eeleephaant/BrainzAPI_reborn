@@ -6,6 +6,15 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE
     role (id SERIAL PRIMARY KEY, title TEXT NOT NULL UNIQUE);
 
+CREATE TABLE
+    role_api_key_permission (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+        role_id INTEGER NOT NULL REFERENCES role (id) ON UPDATE CASCADE ON DELETE CASCADE,
+        action TEXT NOT NULL CHECK (action IN ('read', 'write', 'delete', 'admin')),
+        institution_id INTEGER NULL,
+        UNIQUE NULLS NOT DISTINCT (role_id, action, institution_id)
+    );
+
 
 CREATE TABLE
     developer_accounts (

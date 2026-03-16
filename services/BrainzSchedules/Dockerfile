@@ -2,13 +2,16 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+COPY services/BrainzSchedules/go.mod services/BrainzSchedules/go.sum ./
+COPY services/BrainzSchedules/go.work services/BrainzSchedules/go.work.sum ./
+COPY common ./common
+COPY services/BrainzSchedules ./services/BrainzSchedules
+
+WORKDIR /app/services/BrainzSchedules
 
 RUN go mod download
 
-COPY . .
-
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/main ./cmd
 # Final stage
 FROM alpine:latest
 

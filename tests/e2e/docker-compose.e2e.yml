@@ -1,0 +1,46 @@
+services:
+  brainz-auth:
+    ports:
+      - "8081:8080"
+    environment:
+      APP_ADDRESS: 0.0.0.0
+      APP_ENV: test
+      RL_ENABLED: "false"
+
+  brainz-developers:
+    environment:
+      APP_ADDRESS: 0.0.0.0
+      APP_ENV: test
+      PEPPER: ${DEVELOPER_CREDS_PEPPER}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ""
+
+  brainz-schedules:
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_started
+      brainz-auth:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      APP_PORT: 8080
+      APP_ADDRESS: 0.0.0.0
+      APP_ENV: test
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_LESSON_NAME}
+      DB_POOL_MAX: ${DB_POOL_MAX}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      AUTH_SERVICE_URL: http://brainz-auth:8080/auth
+      PEPPER: ${DEVELOPER_CREDS_PEPPER}
+      ARGON2_MEMORY: ${ARGON2_MEMORY}
+      ARGON2_TIME: ${ARGON2_TIME}
+      ARGON2_THREADS: ${ARGON2_THREADS}

@@ -1,8 +1,10 @@
 name: brainz-api
 
 services:
-  brainz-api:
-    build: ./services/BrainzSchedules
+  brainz-schedules:
+    build:
+      context: .
+      dockerfile: ./services/BrainzSchedules/Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -19,13 +21,18 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_LESSON_NAME}
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PORT: ${REDIS_PORT}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://brainz-auth:8080}
-      APP_PORT: 8000
-      APP_ADDRESS: localhost
-      APP_ENV: development
+      AUTH_SERVICE_URL: http://brainz-auth:8080
+      APP_PORT: 8080
+      APP_ADDRESS: 0.0.0.0
+      APP_ENV: ${APP_ENV:-development}
+      PEPPER: ${DEVELOPER_CREDS_PEPPER}
+      ARGON2_MEMORY: ${ARGON2_MEMORY}
+      ARGON2_TIME: ${ARGON2_TIME}
+      ARGON2_THREADS: ${ARGON2_THREADS}
     networks:
       - appnet
 
@@ -38,11 +45,13 @@ services:
         condition: service_healthy
         restart: true
     environment:
+      APP_PORT: 8080
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_AUTH_NAME}
+      DB_POOL_MAX: ${DB_POOL_MAX}
       API_KEY_PEPPER: ${API_KEY_PEPPER}
       PEPPER: ${DEVELOPER_CREDS_PEPPER}
       ARGON2_MEMORY: ${ARGON2_MEMORY}
@@ -64,6 +73,7 @@ services:
     ports:
       - '3333:8080'
     environment:
+      APP_PORT: 8080
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USER: ${DB_USER}
@@ -76,24 +86,24 @@ services:
     networks:
       - appnet
 
-  brainz-parser:
-    build: ./services/BrainzParser
-    depends_on:
-      db:
-        condition: service_healthy
-        restart: true
-    ports:
-      - '4444:80'
-    environment:
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_LESSON_NAME}
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PORT: ${REDIS_PORT}
-    networks:
-      - appnet
+  # brainz-parser:
+  #   build: ./services/BrainzParser
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #       restart: true
+  #   ports:
+  #     - '4444:80'
+  #   environment:
+  #     DB_HOST: ${DB_HOST}
+  #     DB_PORT: ${DB_PORT}
+  #     DB_USER: ${DB_USER}
+  #     DB_PASSWORD: ${DB_PASSWORD}
+  #     DB_NAME: ${DB_LESSON_NAME}
+  #     REDIS_HOST: ${REDIS_HOST}
+  #     REDIS_PORT: ${REDIS_PORT}
+  #   networks:
+  #     - appnet
 
   db:
     image: postgres:17-alpine
@@ -101,10 +111,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d
+    ports:
+      - '5432:5432'
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_DB: ${DB_NAME:-postgres}
+      DB_USER: ${DB_USER}
+      DB_LESSON_NAME: ${DB_LESSON_NAME}
+      DB_DEVS_NAME: ${DB_DEVS_NAME}
     networks:
       - appnet
     healthcheck:

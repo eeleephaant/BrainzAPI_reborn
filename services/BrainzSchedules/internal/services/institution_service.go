@@ -7,13 +7,20 @@ import (
 	"context"
 )
 
+type InstitutionRepository interface {
+	Create(ctx context.Context, institution *models.Institution) (int64, error)
+	List(ctx context.Context) ([]*models.Institution, error)
+}
+
 type InstitutionService struct {
-	ir *repositories.InstitutionRepository
+	ir InstitutionRepository
 }
 
 func NewInstitutionService(ir *repositories.InstitutionRepository) *InstitutionService {
 	return &InstitutionService{ir}
 }
+
+var _ InstitutionRepository = (*repositories.InstitutionRepository)(nil)
 
 func (is *InstitutionService) CreateNew(ctx context.Context, instDto dtos.InstitutionCreateDto) (int64, error) {
 	institution := models.Institution{
@@ -36,10 +43,14 @@ func (is *InstitutionService) GetInstitutions(ctx context.Context) ([]dtos.Insti
 	result := make([]dtos.InstitutionDto, len(instList))
 
 	for i, inst := range instList {
+		site := ""
+		if inst.SiteLink != nil {
+			site = *inst.SiteLink
+		}
 		result[i] = dtos.InstitutionDto{
 			Id:   inst.ID,
 			Name: inst.Name,
-			Site: *inst.SiteLink,
+			Site: site,
 		}
 	}
 

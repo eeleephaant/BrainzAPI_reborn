@@ -1,0 +1,109 @@
+name: brainz-api
+
+services:
+  brainz-auth:
+    image: ghcr.io/${IMAGE_NAMESPACE}/brainz-auth:${IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_started
+    environment:
+      APP_PORT: 8080
+      APP_ADDRESS: 0.0.0.0
+      APP_ENV: ${APP_ENV:-production}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_AUTH_NAME}
+      DB_POOL_MAX: ${DB_POOL_MAX}
+      API_KEY_PEPPER: ${API_KEY_PEPPER}
+      PEPPER: ${DEVELOPER_CREDS_PEPPER}
+      ARGON2_MEMORY: ${ARGON2_MEMORY}
+      ARGON2_TIME: ${ARGON2_TIME}
+      ARGON2_THREADS: ${ARGON2_THREADS}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      RL_ENABLED: ${RL_ENABLED:-true}
+      RL_FAIL_OPEN: ${RL_FAIL_OPEN:-true}
+      RL_IP_MAX_REQUESTS: ${RL_IP_MAX_REQUESTS:-120}
+      RL_IP_WINDOW_SECONDS: ${RL_IP_WINDOW_SECONDS:-60}
+      RL_KEY_MAX_REQUESTS: ${RL_KEY_MAX_REQUESTS:-600}
+      RL_KEY_WINDOW_SECONDS: ${RL_KEY_WINDOW_SECONDS:-60}
+    ports:
+      - "${AUTH_PORT:-8081}:8080"
+    networks:
+      - appnet
+
+  brainz-developers:
+    image: ghcr.io/${IMAGE_NAMESPACE}/brainz-developers:${IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      brainz-auth:
+        condition: service_started
+    environment:
+      APP_PORT: 8080
+      APP_ADDRESS: 0.0.0.0
+      APP_ENV: ${APP_ENV:-production}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_DEVS_NAME}
+      DB_POOL_MAX: ${DB_POOL_MAX}
+      PEPPER: ${DEVELOPER_CREDS_PEPPER}
+      ARGON2_MEMORY: ${ARGON2_MEMORY}
+      ARGON2_TIME: ${ARGON2_TIME}
+      ARGON2_THREADS: ${ARGON2_THREADS}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "${DEVELOPERS_PORT:-3333}:8080"
+    networks:
+      - appnet
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_LESSON_NAME: ${DB_LESSON_NAME}
+      DB_DEVS_NAME: ${DB_DEVS_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_LESSON_NAME} && pg_isready -U $${DB_USER} -d $${DB_DEVS_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - appnet
+
+  redis:
+    image: redis:8.2.1-alpine
+    restart: unless-stopped
+    command: |
+      redis-server --maxmemory 500mb --maxmemory-policy allkeys-lru --appendonly no
+    networks:
+      - appnet
+
+volumes:
+  postgres_data:
+
+networks:
+  appnet:
+    driver: bridge

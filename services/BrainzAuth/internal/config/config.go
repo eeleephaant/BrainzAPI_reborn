@@ -6,10 +6,11 @@ import (
 
 type (
 	Config struct {
-		Postgres PostgresConfig `env-prefix:"DB_"`
-		Auth     AuthConfig
-		Redis    RedisConfig `env-prefix:"REDIS_"`
-		App      AppConfig   `env-prefix:"APP_"`
+		Postgres  PostgresConfig `env-prefix:"DB_"`
+		Auth      AuthConfig
+		Redis     RedisConfig     `env-prefix:"REDIS_"`
+		RateLimit RateLimitConfig `env-prefix:"RL_"`
+		App       AppConfig       `env-prefix:"APP_"`
 	}
 
 	AppConfig struct {
@@ -35,8 +36,18 @@ type (
 	}
 
 	RedisConfig struct {
-		Host     string `env:"HOST,required"`
-		Password string `env:"PASSWORD,required"`
+		Host     string `env:"HOST" env-default:"redis"`
+		Port     string `env:"PORT" env-default:"6379"`
+		Password string `env:"PASSWORD" env-default:""`
+	}
+
+	RateLimitConfig struct {
+		Enabled          bool  `env:"ENABLED" env-default:"true"`
+		FailOpen         bool  `env:"FAIL_OPEN" env-default:"true"`
+		IPMaxRequests    int64 `env:"IP_MAX_REQUESTS" env-default:"120"`
+		IPWindowSeconds  int64 `env:"IP_WINDOW_SECONDS" env-default:"60"`
+		KeyMaxRequests   int64 `env:"KEY_MAX_REQUESTS" env-default:"600"`
+		KeyWindowSeconds int64 `env:"KEY_WINDOW_SECONDS" env-default:"60"`
 	}
 )
 

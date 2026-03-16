@@ -11,7 +11,7 @@ import (
 
 type LessonService struct {
 	lr repositories.LessonRepositoryInterface
-	gr *repositories.GroupRepository
+	gr GroupRepository
 }
 
 func NewLessonService(lr repositories.LessonRepositoryInterface, gr *repositories.GroupRepository) *LessonService {
@@ -73,10 +73,14 @@ func (ls *LessonService) GetForDateAndInstitution(ctx context.Context, date time
 
 	var listDTOs []dtos.LessonDto
 	for _, l := range lsModels {
+		cabNum := ""
+		if l.CabNum != nil {
+			cabNum = *l.CabNum
+		}
 		listDTOs = append(listDTOs, dtos.LessonDto{
 			Id:            l.ID,
 			Name:          l.Name,
-			CabNum:        *l.CabNum,
+			CabNum:        cabNum,
 			TeacherName:   l.TeacherName,
 			StartTime:     l.StartTime,
 			EndTime:       l.EndTime,

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Unit Tests (${{ matrix.service.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: BrainzAuth
+            working_directory: services/BrainzAuth
+          - name: BrainzDevelopers
+            working_directory: services/BrainzDevelopers
+          - name: BrainzSchedules
+            working_directory: services/BrainzSchedules
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.4'
+          cache: true
+
+      - name: Run Go tests
+        working-directory: ${{ matrix.service.working_directory }}
+        run: go test ./...
+
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    timeout-minutes: 30
+    env:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: brainz
+      DB_PASSWORD: brainz
+      DB_NAME: postgres
+      DB_LESSON_NAME: brainz_lessons
+      DB_DEVS_NAME: brainz_developers
+      DB_AUTH_NAME: brainz_auth
+      DB_POOL_MAX: "20"
+      API_KEY_PEPPER: ci-api-key-pepper
+      DEVELOPER_CREDS_PEPPER: ci-developer-creds-pepper
+      ARGON2_MEMORY: "65536"
+      ARGON2_TIME: "3"
+      ARGON2_THREADS: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.4'
+          cache: true
+
+      - name: Start e2e environment
+        run: docker compose -f tests/e2e/docker-compose.e2e.yml up -d
+
+      - name: Run end-to-end tests
+        working-directory: tests/e2e
+        run: go test -v .
+
+      - name: Stop e2e environment
+        if: always()
+        run: docker compose -f tests/e2e/docker-compose.e2e.yml down -v

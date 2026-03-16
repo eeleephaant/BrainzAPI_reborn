@@ -43,7 +43,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	ah := handler.NewAuthHandler(us, ss)
 	eh := handler.NewEmailHandler(es, us)
-	kmh := handler.NewKeysManagementHandler(aks, ss)
+	kmh := handler.NewKeysManagementHandler(aks, ss, us)
 
 	router.Register(h, ah, eh, kmh)
 

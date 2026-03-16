@@ -2,11 +2,12 @@ package services
 
 import (
 	"brainz-api/internal/dtos"
+	cmnDtos "brainz/common/dtos"
 	"brainz/common/permissions"
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/cloudwego/hertz/pkg/app"
@@ -16,7 +17,6 @@ import (
 )
 
 type AuthService struct {
-	client  *http.Client
 	baseURL *url.URL
 }
 
@@ -32,26 +32,26 @@ func (ps *AuthService) Authorize(ctx context.Context, reqCtx *app.RequestContext
 	}
 
 	u := *ps.baseURL
-	q := u.Query()
-	q.Set("key", apiKey)
-	u.RawQuery = q.Encode()
-
 	req := &protocol.Request{}
 	req.SetRequestURI(u.String())
-	req.SetMethod(consts.MethodGet)
+	req.SetMethod(consts.MethodPost)
 
-	bodyBytes, err := sonic.Marshal(perm)
+	bodyBytes, err := sonic.Marshal(cmnDtos.RequestedPermissionDTO{Permission: *perm})
 	if err != nil {
 		return false, fmt.Errorf("cannot marshal permissions: %w", err)
 	}
 
 	req.SetBody(bodyBytes)
-
+	req.Header.SetContentTypeBytes([]byte("application/json"))
+	req.Header.Set("X-API-Key", apiKey)
 	req.Header.Set("X-Original-IP", reqCtx.ClientIP())
 	req.Header.Set("X-Original-Path", string(reqCtx.FullPath()))
 	req.Header.Set("X-Original-Method", string(reqCtx.Method()))
 
 	resp := &protocol.Response{}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	err = client.Do(ctx, req, resp)
 	if err != nil {
@@ -67,6 +67,9 @@ func (ps *AuthService) Authorize(ctx context.Context, reqCtx *app.RequestContext
 	}
 
 	body := resp.Body()
+	if len(body) == 0 {
+		return false, fmt.Errorf("failed to decode auth response: empty body")
+	}
 
 	var authResp dtos.AuthResult
 	if err := sonic.Unmarshal(body, &authResp); err != nil {

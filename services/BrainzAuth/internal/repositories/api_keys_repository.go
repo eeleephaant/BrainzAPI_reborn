@@ -126,7 +126,7 @@ func (akr *ApiKeysRepository) GetAllByDeveloperId(ctx context.Context, developer
 		"salt",
 		"created_at",
 		"revoked_at",
-		"expired_at",
+		"expire_at",
 		"prefix_raw",
 		"suffix_raw",
 	).
@@ -181,7 +181,7 @@ func (akr *ApiKeysRepository) GetById(ctx context.Context, id uuid.UUID) (*model
 		"salt",
 		"created_at",
 		"revoked_at",
-		"expired_at",
+		"expire_at",
 		"prefix_raw",
 		"suffix_raw",
 	).
@@ -221,11 +221,11 @@ func (akr *ApiKeysRepository) Create(ctx context.Context, key *models.ApiKey) (*
 	defer conn.Release()
 	queryBuilder := sq.
 		Insert("api_key").
-		Columns("id", "name", "developer_id", "key_hash", "salt", "created_at", "revoked_at", "expired_at", "prefix_raw", "suffix_raw").
+		Columns("id", "name", "developer_id", "key_hash", "salt", "created_at", "revoked_at", "expire_at", "prefix_raw", "suffix_raw").
 		Values(key.ID, key.Name, key.DeveloperID, key.KeyHash, key.Salt, key.CreatedAt, key.RevokedAt, key.ExpireAt, key.PrefixRaw, key.SuffixRaw).
 		Suffix(`
 			RETURNING
-				id, name, developer_id, key_hash, salt, created_at, revoked_at, expired_at, prefix_raw, suffix_raw
+				id, name, developer_id, key_hash, salt, created_at, revoked_at, expire_at, prefix_raw, suffix_raw
 		`).
 		PlaceholderFormat(sq.Dollar)
 
@@ -253,6 +253,87 @@ func (akr *ApiKeysRepository) Create(ctx context.Context, key *models.ApiKey) (*
 	}
 	return &created, nil
 }
+
+func (akr *ApiKeysRepository) CreateWithPermissions(
+	ctx context.Context,
+	key *models.ApiKey,
+	grants []permissions.Permission,
+) (*models.ApiKey, error) {
+	op := "ApiKeysRepository.CreateWithPermissions"
+
+	tx, err := akr.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: begin tx: %w", op, err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	insertKey := sq.
+		Insert("api_key").
+		Columns("id", "name", "developer_id", "key_hash", "salt", "created_at", "revoked_at", "expire_at", "prefix_raw", "suffix_raw").
+		Values(key.ID, key.Name, key.DeveloperID, key.KeyHash, key.Salt, key.CreatedAt, key.RevokedAt, key.ExpireAt, key.PrefixRaw, key.SuffixRaw).
+		Suffix(`
+			RETURNING
+				id, name, developer_id, key_hash, salt, created_at, revoked_at, expire_at, prefix_raw, suffix_raw
+		`).
+		PlaceholderFormat(sq.Dollar)
+
+	sqlQuery, args, err := insertKey.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("%s: build insert key query: %w", op, err)
+	}
+
+	var created models.ApiKey
+	row := tx.QueryRow(ctx, sqlQuery, args...)
+	err = row.Scan(
+		&created.ID,
+		&created.Name,
+		&created.DeveloperID,
+		&created.KeyHash,
+		&created.Salt,
+		&created.CreatedAt,
+		&created.RevokedAt,
+		&created.ExpireAt,
+		&created.PrefixRaw,
+		&created.SuffixRaw,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%s: scan inserted key: %w", op, err)
+	}
+
+	for _, grant := range grants {
+		tag, execErr := tx.Exec(
+			ctx,
+			`
+			INSERT INTO api_key_permission_grant (api_key_id, permission_id, institution_id)
+			SELECT $1, p.id, $2
+			FROM api_key_permission p
+			WHERE p.title = $3
+			`,
+			created.ID,
+			grant.InstitutionID,
+			string(grant.Action),
+		)
+		if execErr != nil {
+			err = fmt.Errorf("%s: insert permission grant: %w", op, execErr)
+			return nil, err
+		}
+		if tag.RowsAffected() == 0 {
+			err = fmt.Errorf("%s: unknown permission action %q", op, grant.Action)
+			return nil, err
+		}
+	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return nil, fmt.Errorf("%s: commit tx: %w", op, commitErr)
+	}
+
+	return &created, nil
+}
+
 func (akr *ApiKeysRepository) Update(ctx context.Context, key *models.ApiKey) (*models.ApiKey, error) {
 	op := "ApiKeysRepository.Update"
 	conn, err := akr.db.Acquire(ctx)
@@ -268,13 +349,13 @@ func (akr *ApiKeysRepository) Update(ctx context.Context, key *models.ApiKey) (*
 		Set("salt", key.Salt).
 		Set("created_at", key.CreatedAt).
 		Set("revoked_at", key.RevokedAt).
-		Set("expired_at", key.ExpireAt).
+		Set("expire_at", key.ExpireAt).
 		Set("prefix_raw", key.PrefixRaw).
 		Set("suffix_raw", key.SuffixRaw).
 		Where(sq.Eq{"id": key.ID}).
 		Suffix(`
 			RETURNING
-				id, name, developer_id, key_hash, salt, created_at, revoked_at, expired_at, prefix_raw, suffix_raw
+				id, name, developer_id, key_hash, salt, created_at, revoked_at, expire_at, prefix_raw, suffix_raw
 		`).
 		PlaceholderFormat(sq.Dollar)
 
@@ -338,7 +419,7 @@ func (akr *ApiKeysRepository) GetByName(ctx context.Context, keyName string) (*m
 		"salt",
 		"created_at",
 		"revoked_at",
-		"expired_at",
+		"expire_at",
 		"prefix_raw",
 		"suffix_raw",
 	).

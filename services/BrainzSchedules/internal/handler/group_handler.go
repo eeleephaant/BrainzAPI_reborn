@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"brainz-api/internal/dtos"
 	"brainz-api/internal/services"
 	"brainz/common/permissions"
 	"context"
@@ -11,14 +12,27 @@ import (
 	"go.uber.org/zap"
 )
 
+type GroupQueryService interface {
+	GetGroupsForInstitution(ctx context.Context, instID int64) ([]dtos.GroupDto, error)
+}
+
+type GroupAuthService interface {
+	Authorize(ctx context.Context, reqCtx *app.RequestContext, apiKey string, perm *permissions.Permission) (bool, error)
+}
+
 type GroupHandler struct {
-	gs *services.GroupService
-	as *services.AuthService
+	gs GroupQueryService
+	as GroupAuthService
 }
 
 func NewGroupHandler(gs *services.GroupService, as *services.AuthService) *GroupHandler {
 	return &GroupHandler{gs, as}
 }
+
+var (
+	_ GroupQueryService = (*services.GroupService)(nil)
+	_ GroupAuthService  = (*services.AuthService)(nil)
+)
 
 func (gh *GroupHandler) GetGroupsForInst(ctx context.Context, c *app.RequestContext) {
 	instID := c.Query("institution_id")
@@ -42,6 +56,13 @@ func (gh *GroupHandler) GetGroupsForInst(ctx context.Context, c *app.RequestCont
 		Action:        permissions.ActionRead,
 		InstitutionID: &institutionID,
 	})
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, map[string]string{
+			"error": "internal server error",
+		})
+		zap.L().Error("Authorize group access", zap.Error(err))
+		return
+	}
 	if !isLegit {
 		c.Status(consts.StatusForbidden)
 		return

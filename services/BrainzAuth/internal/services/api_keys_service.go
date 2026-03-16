@@ -21,12 +21,12 @@ func NewApiKeysService(akr *repositories.ApiKeysRepository) *ApiKeysService {
 }
 
 func (aks *ApiKeysService) UserCanModifyKey(ctx context.Context, apiKey string, devUUID uuid.UUID) (bool, error) {
-	//op := "ApiKeysService.UserCanModifyKey"
-	apiKeyData, err := utils.ExtractDataFromKey(apiKey)
+	op := "ApiKeysService.UserCanModifyKey"
+	keyID, err := resolveAPIKeyID(apiKey)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%s: %w", op, err)
 	}
-	key, err := aks.akr.GetById(ctx, apiKeyData.ID)
+	key, err := aks.akr.GetById(ctx, keyID)
 	if err != nil {
 		return false, err
 	}
@@ -94,7 +94,7 @@ func (aks *ApiKeysService) ValidateKey(ctx context.Context, rawKey string, ipAdd
 	return fmt.Errorf("%s: ip address %s is not whitelisted", op, ipAddr)
 }
 
-func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UUID, name string) (*models.ApiKey, *string, error) {
+func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UUID, name string, grants []permissions.Permission) (*models.ApiKey, *string, error) {
 	op := "ApiKeysService.CreateApiKey"
 	expiresAt := time.Now().AddDate(0, 2, 0)
 	rawKey, err := utils.GenerateSecretKey(32)
@@ -119,7 +119,7 @@ func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UU
 		SuffixRaw:   displayedKey[len(displayedKey)-4:],
 	}
 
-	createdKey, err := aks.akr.Create(ctx, &newKey)
+	createdKey, err := aks.akr.CreateWithPermissions(ctx, &newKey, grants)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: failed to create api key in db: %w", op, err)
 	}
@@ -129,9 +129,9 @@ func (aks *ApiKeysService) CreateApiKey(ctx context.Context, developerId uuid.UU
 
 func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, apiKey string) error {
 	op := "ApiKeysService.RemoveApiKey"
-	keyUUID, err := uuid.Parse(apiKey)
+	keyUUID, err := resolveAPIKeyID(apiKey)
 	if err != nil {
-		return fmt.Errorf("%s: failed to parse api key: %w", op, err)
+		return fmt.Errorf("%s: failed to resolve api key id: %w", op, err)
 	}
 
 	key, err := aks.akr.GetById(ctx, keyUUID)
@@ -152,4 +152,16 @@ func (aks *ApiKeysService) GetApiKeys(ctx context.Context, developerId uuid.UUID
 		return nil, fmt.Errorf("%s: failed to get api keys from db: %w", op, err)
 	}
 	return keys, nil
+}
+
+func resolveAPIKeyID(apiKey string) (uuid.UUID, error) {
+	if keyID, err := uuid.Parse(apiKey); err == nil {
+		return keyID, nil
+	}
+
+	extracted, err := utils.ExtractDataFromKey(apiKey)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return extracted.ID, nil
 }

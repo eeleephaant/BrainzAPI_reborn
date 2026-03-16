@@ -59,7 +59,7 @@ func (akmh *ApiKeysManagementHandler) CreateApiKey(ctx context.Context, c *app.R
 		return
 	}
 
-	key, displayedKey, err := akmh.aks.CreateApiKey(ctx, requestData.DeveloperID, requestData.Name)
+	key, displayedKey, err := akmh.aks.CreateApiKey(ctx, requestData.DevUUID, requestData.ApiKeyName, requestData.Permissions)
 	if err != nil {
 		c.String(500, "Failed to create api key: "+err.Error())
 		zap.L().Error("Failed to create api key", zap.Error(err))
