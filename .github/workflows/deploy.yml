@@ -41,7 +41,7 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          ssh -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" <<EOF
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=120 -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" <<EOF
           set -euo pipefail
           cd "$DEPLOY_PATH"
           git pull --ff-only

@@ -28,13 +28,13 @@ async def api_key_middleware(
     if not api_key:
         return JSONResponse(
             status_code=401,
-            content={"status": False, "error_message": "Missing API key"}
+            content={"status": False, "error": "Missing API key"}
         )
     institution_id = request.query_params.get("institution_id")
     if institution_id is None:
         return JSONResponse(
             status_code=400,
-            content={"status": False, "error_message": "Institution ID is required"}
+            content={"status": False, "error": "Institution ID is required"}
         )
 
     needed_rights = {"perm": {"action": "write", "institution_id": int(institution_id)}}
@@ -46,13 +46,13 @@ async def api_key_middleware(
         except httpx.RequestError:
             return JSONResponse(
                 status_code=500,
-                content={"status": False, "error_message": "Auth service unavailable"}
+                content={"status": False, "error": "Auth service unavailable"}
             )
 
     if not data.get("status", False):
         return JSONResponse(
             status_code=401,
-            content={"status": False, "error_message": data.get("error_message", "Invalid API key")}
+            content={"status": False, "error": data.get("error", "Invalid API key")}
         )
 
     request.state.user = data.get("user")
