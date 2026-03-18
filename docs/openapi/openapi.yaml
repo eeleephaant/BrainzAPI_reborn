@@ -1,0 +1,590 @@
+openapi: 3.0.3
+info:
+  title: BrainzAPI
+  version: "0.1"
+  description: |
+    Combined OpenAPI spec for BrainzAPI microservices.
+    Note: services run on different hosts/ports; each operation has its own `servers`.
+
+tags:
+  - name: auth
+    description: BrainzAuth service
+  - name: developers
+    description: BrainzDevelopers service
+  - name: schedules
+    description: BrainzSchedules service
+  - name: parser
+    description: BrainzParser service
+
+components:
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    SessionTokenHeader:
+      type: apiKey
+      in: header
+      name: X-Session-Token
+  schemas:
+    Error:
+      type: object
+      additionalProperties: true
+    AuthResult:
+      type: object
+      properties:
+        status:
+          type: boolean
+        error_message:
+          type: string
+      required: [status]
+    Permission:
+      type: object
+      description: |
+        Permission object as used by services. Field casing is Go-struct style.
+      properties:
+        Action:
+          type: string
+          enum: [read, write, delete, admin]
+        InstitutionID:
+          type: integer
+          format: int64
+          nullable: true
+      required: [Action]
+    RequestedPermissionDTO:
+      type: object
+      properties:
+        perm:
+          $ref: "#/components/schemas/Permission"
+      required: [perm]
+
+    RegisterDto:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 13
+          maxLength: 255
+      required: [email, password]
+    LoginDto:
+      allOf:
+        - $ref: "#/components/schemas/RegisterDto"
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+      required: [token]
+    RegisterResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    ApiKeyCreateDto:
+      type: object
+      properties:
+        api_key_name:
+          type: string
+        dev_uuid:
+          type: string
+          format: uuid
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Permission"
+        ip_whitelist:
+          type: array
+          items:
+            type: string
+      required: [api_key_name, dev_uuid]
+    ApiKeyCreateResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        api_key:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required: [name, api_key, expires_at]
+    ApiKeyRemoveDto:
+      type: object
+      properties:
+        key:
+          type: string
+        dev_uuid:
+          type: string
+          format: uuid
+      required: [key, dev_uuid]
+    ApiKeyShareModel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        suffix:
+          type: string
+        prefix:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, title, suffix, prefix, expires_at]
+
+    Institution:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        site_link:
+          type: string
+      required: [id, name]
+    Group:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+      required: [id, name]
+    Lesson:
+      type: object
+      additionalProperties: true
+
+paths:
+  /auth:
+    get:
+      tags: [auth]
+      servers:
+        - url: http://127.0.0.1:8081
+      summary: Authorize by API key (GET)
+      description: |
+        BrainzAuth supports GET and POST on `/auth`. Most callers should use POST with JSON body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestedPermissionDTO"
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Authorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+    post:
+      tags: [auth]
+      servers:
+        - url: http://127.0.0.1:8081
+      summary: Authorize by API key (POST)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestedPermissionDTO"
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Authorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "400":
+          description: Invalid request
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+
+  /key:
+    post:
+      tags: [auth, developers]
+      servers:
+        - url: http://127.0.0.1:8081
+          description: BrainzAuth
+      summary: Create API key (Auth)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyCreateDto"
+      responses:
+        "200":
+          description: Key created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreateResponse"
+        "400":
+          description: Invalid request
+          content:
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: Internal error
+          content:
+            text/plain:
+              schema:
+                type: string
+    delete:
+      tags: [auth, developers]
+      servers:
+        - url: http://127.0.0.1:8081
+          description: BrainzAuth
+      summary: Remove API key (Auth)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyRemoveDto"
+      responses:
+        "200":
+          description: Removed
+          content:
+            text/plain:
+              schema:
+                type: string
+        "403":
+          description: Access denied
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /keys:
+    get:
+      tags: [auth, developers]
+      servers:
+        - url: http://127.0.0.1:8081
+          description: BrainzAuth
+      summary: Get API keys for developer (Auth)
+      parameters:
+        - in: query
+          name: developer_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Keys list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKeyShareModel"
+                required: [keys]
+
+  /register:
+    post:
+      tags: [developers]
+      servers:
+        - url: http://127.0.0.1:3333
+      summary: Register developer account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterDto"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        "400":
+          description: Invalid body
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /login:
+    post:
+      tags: [developers]
+      servers:
+        - url: http://127.0.0.1:3333
+      summary: Login and get session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginDto"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Wrong credentials / 2FA required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        "400":
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /institution:
+    get:
+      tags: [schedules]
+      servers:
+        - url: http://127.0.0.1:8080
+      summary: List institutions (public)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Institution"
+    post:
+      tags: [schedules]
+      servers:
+        - url: http://127.0.0.1:8080
+      summary: Create institution (requires write/admin)
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created
+        "403":
+          description: Forbidden
+
+  /group:
+    get:
+      tags: [schedules]
+      servers:
+        - url: http://127.0.0.1:8080
+      summary: List groups for institution (requires read)
+      security:
+        - ApiKeyHeader: []
+      parameters:
+        - in: query
+          name: institution_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Group"
+        "403":
+          description: Forbidden
+
+  /lessons:
+    get:
+      tags: [schedules]
+      servers:
+        - url: http://127.0.0.1:8080
+      summary: Get lessons (requires read)
+      security:
+        - ApiKeyHeader: []
+      parameters:
+        - in: query
+          name: institution_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+            example: "2026-03-15"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lesson"
+        "403":
+          description: Forbidden
+    post:
+      tags: [schedules]
+      servers:
+        - url: http://127.0.0.1:8080
+      summary: Add lessons (requires write)
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created
+        "403":
+          description: Forbidden
+
+  /info-stream:
+    get:
+      tags: [schedules]
+      servers:
+        - url: http://127.0.0.1:8080
+      summary: WebSocket info stream
+      description: |
+        Upgrades to WebSocket. Requires query parameter `institution_id`.
+        CheckOrigin allows empty Origin or `https://pentapulse.ru`.
+      parameters:
+        - in: query
+          name: institution_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        "101":
+          description: Switching Protocols (WebSocket)
+        "400":
+          description: Missing/invalid institution_id
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /parse:
+    post:
+      tags: [parser]
+      servers:
+        - url: http://127.0.0.1:8000
+          description: Default FastAPI dev port (adjust to your deployment)
+      summary: Parse XLSX schedule and write to DB
+      security:
+        - ApiKeyHeader: []
+      parameters:
+        - in: query
+          name: institution_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        "200":
+          description: Parsed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true

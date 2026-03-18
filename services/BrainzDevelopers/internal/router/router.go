@@ -6,10 +6,9 @@ import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
 
-func Register(h *server.Hertz, ah *handler.AuthHandler, eh *handler.EmailHandler, kmh *handler.KeysManagementHandler) {
+func Register(h *server.Hertz, ah *handler.AuthHandler, kmh *handler.KeysManagementHandler) {
 	h.POST("/register", ah.Register)
 	h.POST("/login", ah.Login)
-	h.POST("/confirm-email", eh.GetConfirmEmailCode)
 	h.GET("/keys", kmh.GetApiKeys)
 	h.POST("/key", kmh.CreateApiKey)
 	h.DELETE("/key", kmh.DeleteApiKey)

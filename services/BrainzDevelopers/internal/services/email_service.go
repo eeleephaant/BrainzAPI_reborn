@@ -12,11 +12,17 @@ import (
 )
 
 type EmailService struct {
-	etr *repository.EmailTokensRepository
+	etr    *repository.EmailTokensRepository
+	users  *repository.UserRepository
+	mailer Mailer
 }
 
-func NewEmailConfirmService(etr *repository.EmailTokensRepository) *EmailService {
-	return &EmailService{etr: etr}
+func NewEmailConfirmService(etr *repository.EmailTokensRepository, users *repository.UserRepository, mailer Mailer) *EmailService {
+	return &EmailService{
+		etr:    etr,
+		users:  users,
+		mailer: mailer,
+	}
 }
 
 func (ecs *EmailService) SendConfirmationEmail(ctx context.Context, developerId uuid.UUID) (*entity.EmailConfirmationToken, error) {
@@ -42,6 +48,20 @@ func (ecs *EmailService) SendConfirmationEmail(ctx context.Context, developerId 
 	if err != nil {
 		return nil, err
 	}
+
+	// Load developer email to send code.
+	account, err := ecs.users.GetById(ctx, developerId)
+	if err != nil {
+		return nil, fmt.Errorf("%s: load developer: %w", op, err)
+	}
+
+	subject := "Email confirmation code"
+	body := fmt.Sprintf("Your confirmation code is: %s\nIt will expire in 30 minutes.", emailConfToken.NumbericCode)
+
+	if err := ecs.mailer.Send(ctx, account.Email, subject, body); err != nil {
+		return nil, fmt.Errorf("%s: send email: %w", op, err)
+	}
+
 	return emailConfToken, nil
 }
 

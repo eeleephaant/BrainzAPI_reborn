@@ -28,7 +28,8 @@ func NewAuthService(baseURL *url.URL) *AuthService {
 
 func (ps *AuthService) Authorize(ctx context.Context, reqCtx *app.RequestContext, apiKey string, perm *permissions.Permission) (bool, error) {
 	if apiKey == "" {
-		return false, fmt.Errorf("api key is required")
+		// Missing API key: treat as unauthorized without reporting internal error.
+		return false, nil
 	}
 
 	u := *ps.baseURL

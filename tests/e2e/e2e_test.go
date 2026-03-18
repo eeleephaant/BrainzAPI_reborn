@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -29,8 +31,7 @@ const (
 var repoRoot string
 
 type registerResponse struct {
-	Message                string `json:"message"`
-	EmailConfirmationToken string `json:"email_confirmation_token"`
+	Message string `json:"message"`
 }
 
 type loginResponse struct {
@@ -138,9 +139,7 @@ func TestUserKeyHasReadOnlyAccess(t *testing.T) {
 	email := uniqueEmail("user")
 	password := "SuperSecretPass123!"
 
-	confirmationToken := registerUser(t, email, password)
-	confirmationCode := fetchConfirmationCode(t, confirmationToken)
-	confirmEmail(t, confirmationToken, confirmationCode)
+	registerUser(t, email, password)
 
 	sessionToken := loginUser(t, email, password)
 	developerID := fetchDeveloperID(t, email)
@@ -156,9 +155,7 @@ func TestAdminKeyHasWriteAccess(t *testing.T) {
 	email := uniqueEmail("admin")
 	password := "SuperSecretPass123!"
 
-	confirmationToken := registerUser(t, email, password)
-	confirmationCode := fetchConfirmationCode(t, confirmationToken)
-	confirmEmail(t, confirmationToken, confirmationCode)
+	registerUser(t, email, password)
 	setDeveloperRole(t, email, 1)
 
 	sessionToken := loginUser(t, email, password)
@@ -169,26 +166,6 @@ func TestAdminKeyHasWriteAccess(t *testing.T) {
 
 	assertAuthorized(t, apiKey, "read", ptr(int64(1)), http.StatusOK, true)
 	assertAuthorized(t, apiKey, "write", ptr(int64(999)), http.StatusOK, true)
-}
-
-func TestLoginRequiresConfirmedEmail(t *testing.T) {
-	email := uniqueEmail("pending")
-	password := "SuperSecretPass123!"
-
-	registerUser(t, email, password)
-
-	body := map[string]string{
-		"email":    email,
-		"password": password,
-	}
-	var resp map[string]string
-	status := doJSON(t, http.MethodPost, developersBaseURL+"/login", body, nil, &resp)
-	if status != http.StatusUnauthorized {
-		t.Fatalf("login before email confirm status = %d, want %d", status, http.StatusUnauthorized)
-	}
-	if resp["error"] != "email not confirmed" {
-		t.Fatalf("login before email confirm error = %q, want %q", resp["error"], "email not confirmed")
-	}
 }
 
 func TestDuplicateRegistrationRejected(t *testing.T) {
@@ -208,29 +185,6 @@ func TestDuplicateRegistrationRejected(t *testing.T) {
 	}
 	if resp["error"] != "email already exists" {
 		t.Fatalf("duplicate register error = %q, want %q", resp["error"], "email already exists")
-	}
-}
-
-func TestConfirmEmailCodeCannotBeReused(t *testing.T) {
-	email := uniqueEmail("reuse")
-	password := "SuperSecretPass123!"
-
-	confirmationToken := registerUser(t, email, password)
-	confirmationCode := fetchConfirmationCode(t, confirmationToken)
-
-	confirmEmail(t, confirmationToken, confirmationCode)
-
-	body := map[string]string{
-		"token": confirmationToken,
-		"code":  confirmationCode,
-	}
-	var resp map[string]string
-	status := doJSON(t, http.MethodPost, developersBaseURL+"/confirm-email", body, nil, &resp)
-	if status != http.StatusUnauthorized {
-		t.Fatalf("reuse confirm code status = %d, want %d", status, http.StatusUnauthorized)
-	}
-	if resp["error"] != "code is already used" {
-		t.Fatalf("reuse confirm code error = %q, want %q", resp["error"], "code is already used")
 	}
 }
 
@@ -315,9 +269,7 @@ func TestCreateKeyRejectsInvalidSessionToken(t *testing.T) {
 	email := uniqueEmail("invalid_session")
 	password := "SuperSecretPass123!"
 
-	confirmationToken := registerUser(t, email, password)
-	confirmationCode := fetchConfirmationCode(t, confirmationToken)
-	confirmEmail(t, confirmationToken, confirmationCode)
+	registerUser(t, email, password)
 	developerID := fetchDeveloperID(t, email)
 
 	body := map[string]any{
@@ -489,7 +441,30 @@ func TestSchedulesGetLessonsWithoutKeyReturns403(t *testing.T) {
 	}
 }
 
-func registerUser(t *testing.T, email, password string) string {
+func TestSchedulesInfoStreamWebSocketUpgrade(t *testing.T) {
+	u := "ws://127.0.0.1:8080/info-stream?institution_id=1"
+
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	conn, resp, err := dialer.Dial(u, nil)
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("websocket dial failed (status=%d): %v", status, err)
+	}
+	defer conn.Close()
+
+	_ = conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	if err := conn.WriteMessage(websocket.TextMessage, []byte("e2e")); err != nil {
+		t.Fatalf("websocket write failed: %v", err)
+	}
+}
+
+func registerUser(t *testing.T, email, password string) {
 	t.Helper()
 
 	body := map[string]string{
@@ -501,23 +476,6 @@ func registerUser(t *testing.T, email, password string) string {
 	status := doJSON(t, http.MethodPost, developersBaseURL+"/register", body, nil, &resp)
 	if status != http.StatusCreated {
 		t.Fatalf("register status = %d, want %d", status, http.StatusCreated)
-	}
-	if resp.EmailConfirmationToken == "" {
-		t.Fatal("register response did not include email confirmation token")
-	}
-	return resp.EmailConfirmationToken
-}
-
-func confirmEmail(t *testing.T, token, code string) {
-	t.Helper()
-
-	body := map[string]string{
-		"token": token,
-		"code":  code,
-	}
-	status := doJSON(t, http.MethodPost, developersBaseURL+"/confirm-email", body, nil, nil)
-	if status != http.StatusOK {
-		t.Fatalf("confirm email status = %d, want %d", status, http.StatusOK)
 	}
 }
 
@@ -544,9 +502,7 @@ func registerConfirmAndLogin(t *testing.T, prefix, password string) (string, str
 	t.Helper()
 
 	email := uniqueEmail(prefix)
-	confirmationToken := registerUser(t, email, password)
-	confirmationCode := fetchConfirmationCode(t, confirmationToken)
-	confirmEmail(t, confirmationToken, confirmationCode)
+	registerUser(t, email, password)
 	sessionToken := loginUser(t, email, password)
 	developerID := fetchDeveloperID(t, email)
 
@@ -617,15 +573,6 @@ func assertAuthorized(t *testing.T, apiKey, action string, institutionID *int64,
 	if resp.Status != wantAuthorized {
 		t.Fatalf("auth(%s) authorized = %v, want %v", action, resp.Status, wantAuthorized)
 	}
-}
-
-func fetchConfirmationCode(t *testing.T, token string) string {
-	t.Helper()
-	query := fmt.Sprintf(
-		"SELECT numberic_code FROM email_confirmation_token WHERE token = '%s' ORDER BY created_at DESC LIMIT 1;",
-		token,
-	)
-	return strings.TrimSpace(execPSQLQuery(t, "brainz_developers", query))
 }
 
 func fetchDeveloperID(t *testing.T, email string) string {

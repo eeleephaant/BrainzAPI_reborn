@@ -73,6 +73,18 @@ services:
     networks:
       - appnet
 
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    restart: unless-stopped
+    environment:
+      SWAGGER_JSON: /tmp/openapi.yaml
+    volumes:
+      - ./docs/openapi/openapi.yaml:/tmp/openapi.yaml:ro
+    ports:
+      - "${SWAGGER_PORT:-8099}:8080"
+    networks:
+      - appnet
+
   db:
     image: postgres:17-alpine
     restart: unless-stopped

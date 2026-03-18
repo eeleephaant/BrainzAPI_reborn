@@ -38,18 +38,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	sr := repository.NewSessionRepository(psqlPool)
 	ur := repository.NewUserRepository(psqlPool)
-	etr := repository.NewEmailTokensRepository(psqlPool)
 
 	ss := services.NewSessionService(sr)
-	es := services.NewEmailConfirmService(etr)
-	us := services.NewUserService(ur, es)
+	us := services.NewUserService(ur)
 	aks := services.NewApiKeysService(hc, "http://brainz-auth:8080", "")
 
 	ah := handler.NewAuthHandler(us, ss)
-	eh := handler.NewEmailHandler(es, us)
 	kmh := handler.NewKeysManagementHandler(aks, ss, us)
 
-	router.Register(h, ah, eh, kmh)
+	router.Register(h, ah, kmh)
 
 	h.OnShutdown = append(h.OnShutdown, func(ctx context.Context) {
 		zap.L().Info("Stopping Server gracefully...")

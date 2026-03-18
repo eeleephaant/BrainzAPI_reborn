@@ -156,7 +156,7 @@ func TestUserService_Authenticate(t *testing.T) {
 			wantErr: entity.ErrUserBanned,
 		},
 		{
-			name:     "email_not_confirmed",
+			name:     "email_not_confirmed_no_longer_blocking",
 			email:    "unconfirmed@test.com",
 			password: password,
 			setupRepo: func() *mockUserRepo {
@@ -172,13 +172,13 @@ func TestUserService_Authenticate(t *testing.T) {
 					},
 				}
 			},
-			wantErr: entity.ErrEmailNotConfirmed,
+			wantErr: nil,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := tt.setupRepo()
-			svc := NewUserService(repo, &mockEmailSender{})
+			svc := NewUserService(repo)
 			acc, err := svc.Authenticate(ctx, tt.email, tt.password)
 			if tt.wantErr != nil {
 				if err == nil {
@@ -204,14 +204,14 @@ func TestUserService_RegistrateUser(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := &mockUserRepo{}
-		svc := NewUserService(repo, &mockEmailSender{})
+		svc := NewUserService(repo)
 		dto := &dtos.RegisterDto{Email: "new@test.com", Password: "securepassword123"}
 		ect, err := svc.RegistrateUser(ctx, dto)
 		if err != nil {
 			t.Fatalf("RegistrateUser: %v", err)
 		}
-		if ect == nil || ect.DeveloperID == uuid.Nil {
-			t.Error("expected non-nil token with developer id")
+		if ect == nil {
+			t.Error("expected non-nil token response")
 		}
 	})
 
@@ -221,7 +221,7 @@ func TestUserService_RegistrateUser(t *testing.T) {
 				return nil, entity.ErrEmailAlreadyExists
 			},
 		}
-		svc := NewUserService(repo, &mockEmailSender{})
+		svc := NewUserService(repo)
 		dto := &dtos.RegisterDto{Email: "exists@test.com", Password: "securepassword123"}
 		_, err := svc.RegistrateUser(ctx, dto)
 		if err != entity.ErrEmailAlreadyExists {
@@ -252,7 +252,7 @@ func TestUserService_ConfirmEmail(t *testing.T) {
 				return u, nil
 			},
 		}
-		svc := NewUserService(repo, &mockEmailSender{})
+		svc := NewUserService(repo)
 		err := svc.ConfirmEmail(ctx, devID)
 		if err != nil {
 			t.Fatalf("ConfirmEmail: %v", err)
@@ -264,7 +264,7 @@ func TestUserService_ConfirmEmail(t *testing.T) {
 
 	t.Run("user_not_found", func(t *testing.T) {
 		repo := &mockUserRepo{byID: map[uuid.UUID]*entity.DeveloperAccount{}}
-		svc := NewUserService(repo, &mockEmailSender{})
+		svc := NewUserService(repo)
 		err := svc.ConfirmEmail(ctx, uuid.New())
 		if err == nil {
 			t.Fatal("expected error when user not found")

@@ -19,18 +19,12 @@ type UserRepository interface {
 	Update(ctx context.Context, user *entity.DeveloperAccount) (*entity.DeveloperAccount, error)
 }
 
-// EmailConfirmationSender sends email confirmation (for testing and DI).
-type EmailConfirmationSender interface {
-	SendConfirmationEmail(ctx context.Context, developerId uuid.UUID) (*entity.EmailConfirmationToken, error)
-}
-
 type UserService struct {
-	ur  UserRepository
-	ecs EmailConfirmationSender
+	ur UserRepository
 }
 
-func NewUserService(ur UserRepository, ecs EmailConfirmationSender) *UserService {
-	return &UserService{ur: ur, ecs: ecs}
+func NewUserService(ur UserRepository) *UserService {
+	return &UserService{ur: ur}
 }
 
 func (us *UserService) GetById(ctx context.Context, devId uuid.UUID) (*entity.DeveloperAccount, error) {
@@ -49,10 +43,6 @@ func (us *UserService) Authenticate(ctx context.Context, email string, password 
 
 	if account.BannedAt != nil {
 		return nil, entity.ErrUserBanned
-	}
-
-	if account.EmailConfirmedAt == nil {
-		return nil, entity.ErrEmailNotConfirmed
 	}
 
 	return account, nil
@@ -75,9 +65,11 @@ func (us *UserService) ConfirmEmail(ctx context.Context, devId uuid.UUID) error 
 func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.RegisterDto) (*entity.EmailConfirmationToken, error) {
 	salt := security.GetRandomSalt()
 	passwordHash := security.GetHashArgon2(registerDto.Password, salt)
+	now := time.Now()
 
 	var user = entity.DeveloperAccount{
 		Email:        registerDto.Email,
+		EmailConfirmedAt: &now,
 		PasswordHash: passwordHash,
 		Salt:         salt,
 		RoleId:       0,
@@ -88,15 +80,6 @@ func (us *UserService) RegistrateUser(ctx context.Context, registerDto *dtos.Reg
 		return nil, err
 	}
 
-	ect, err := us.ecs.SendConfirmationEmail(ctx, acc.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Не логируем сам токен/код, чтобы не светить секреты в логах.
-	zap.L().Debug("Sent confirmation email",
-		zap.String("developer_id", acc.ID.String()),
-	)
-
-	return ect, nil
+	zap.L().Debug("User registered (email confirmation disabled)", zap.String("developer_id", acc.ID.String()))
+	return &entity.EmailConfirmationToken{Token: "disabled"}, nil
 }

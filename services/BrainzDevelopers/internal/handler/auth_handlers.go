@@ -55,8 +55,6 @@ func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 			c.JSON(403, map[string]string{"error": "user banned"})
 		case errors.Is(err, entity.ErrNeed2FA):
 			c.JSON(401, map[string]string{"error": "2FA required"})
-		case errors.Is(err, entity.ErrEmailNotConfirmed):
-			c.JSON(401, map[string]string{"error": "email not confirmed"})
 		default:
 			c.JSON(500, map[string]string{"error": "internal server error"})
 			zap.L().Error(op,
@@ -98,5 +96,6 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 
-	c.JSON(201, map[string]string{"message": "User created, check your email to confirm it", "email_confirmation_token": ect.Token})
+	_ = ect // email confirmation disabled
+	c.JSON(201, map[string]string{"message": "User created"})
 }

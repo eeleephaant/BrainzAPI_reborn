@@ -79,8 +79,8 @@ func (ur *UserRepository) Create(ctx context.Context, developer_account *entity.
 
 	queryBuilder := sq.
 		Insert("developer_accounts").
-		Columns("email", "password_hash", "salt", "role_id").
-		Values(developer_account.Email, developer_account.PasswordHash, developer_account.Salt, developer_account.RoleId).
+		Columns("email", "email_confirmed_at", "password_hash", "salt", "role_id").
+		Values(developer_account.Email, developer_account.EmailConfirmedAt, developer_account.PasswordHash, developer_account.Salt, developer_account.RoleId).
 		Suffix("RETURNING id, email, email_confirmed_at, password_hash, salt, two_factor_secret, created_at, banned_at, role_id").
 		PlaceholderFormat(sq.Dollar)
 
