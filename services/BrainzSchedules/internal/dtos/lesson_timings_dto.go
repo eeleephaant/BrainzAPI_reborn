@@ -1,5 +1,7 @@
 package dtos
 
+import "time"
+
 type LessonsTimings struct {
 	Lesson1 LessonTiming `json:"lesson_1"`
 	Lesson2 LessonTiming `json:"lesson_2"`
@@ -10,6 +12,6 @@ type LessonsTimings struct {
 }
 
 type LessonTiming struct {
-	StartTime string `json:"start_time"`
-	EndTime   string `json:"end_time"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
 }

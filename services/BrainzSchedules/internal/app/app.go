@@ -54,7 +54,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	as := services.NewAuthService(authURL)
 
-	sh := handler.NewScheduleHandler(rc, ls, as)
+	sh := handler.NewScheduleHandler(ls, as)
 	ih := handler.NewInstitutionHandler(is, as)
 	gh := handler.NewGroupHandler(gs, as)
 

@@ -19,6 +19,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func urlQueryEscape(s string) string {
+	// API keys contain ':' which is safe in query values; avoid escaping to keep
+	// upstream parsing/validation consistent.
+	return s
+}
+
 const (
 	authBaseURL         = "http://127.0.0.1:8081"
 	developersBaseURL   = "http://127.0.0.1:3333"
@@ -292,6 +298,54 @@ func TestCreateKeyRejectsInvalidSessionToken(t *testing.T) {
 	}
 }
 
+func TestDevelopersGetKeysWithoutSessionReturns400(t *testing.T) {
+	status := doJSON(t, http.MethodGet, developersBaseURL+"/keys", nil, nil, nil)
+	if status != http.StatusBadRequest {
+		t.Fatalf("get keys without session status = %d, want %d", status, http.StatusBadRequest)
+	}
+}
+
+func TestDevelopersDeleteKeyForOtherDeveloperReturns403(t *testing.T) {
+	password := "SuperSecretPass123!"
+
+	_, ownerSession, ownerDevID := registerConfirmAndLogin(t, "del_owner", password)
+	_, attackerSession, attackerDevID := registerConfirmAndLogin(t, "del_attacker", password)
+
+	// owner creates a key
+	ownerKey := createAPIKey(t, ownerSession, ownerDevID, []map[string]any{{"Action": "read"}})
+
+	// attacker tries to delete owner's key
+	status, body := doRaw(
+		t,
+		http.MethodDelete,
+		developersBaseURL+"/key?api_key="+urlQueryEscape(ownerKey),
+		nil,
+		map[string]string{"X-Session-Token": attackerSession},
+	)
+	if status != http.StatusForbidden {
+		t.Fatalf(
+			"delete other developer key status=%d, want %d (attacker=%s) body=%s",
+			status, http.StatusForbidden, attackerDevID, string(body),
+		)
+	}
+}
+
+func TestSchedulesCreateInstitutionWithoutAdminReturns403(t *testing.T) {
+	// read-only key should not be able to create institution (admin permission required).
+	readKey := createPortalAPIKeyForRole(t, "inst_readonly", 0)
+
+	body := map[string]any{
+		"name":      "E2E Forbidden Institution",
+		"site_link": "https://example.com",
+	}
+	status := doJSON(t, http.MethodPost, schedulesBaseURL+"/institution", body, map[string]string{
+		"X-Api-Key": readKey,
+	}, nil)
+	if status != http.StatusForbidden {
+		t.Fatalf("create institution with read key status = %d, want %d", status, http.StatusForbidden)
+	}
+}
+
 func TestRegisterRejectsInvalidBody(t *testing.T) {
 	body := map[string]string{
 		"email":    "not-an-email",
@@ -354,9 +408,12 @@ func TestAuthRejectsMissingAPIKey(t *testing.T) {
 	}
 }
 
-func TestSchedulesGetInstitutionsPublic(t *testing.T) {
+func TestSchedulesGetInstitutionsRequiresKey(t *testing.T) {
+	readKey := createPortalAPIKeyForRole(t, "inst_list", 0)
 	var resp []institutionResponse
-	status := doJSON(t, http.MethodGet, schedulesBaseURL+"/institution", nil, nil, &resp)
+	status := doJSON(t, http.MethodGet, schedulesBaseURL+"/institution", nil, map[string]string{
+		"X-Api-Key": readKey,
+	}, &resp)
 	if status != http.StatusOK {
 		t.Fatalf("get institutions status = %d, want %d", status, http.StatusOK)
 	}
@@ -681,6 +738,43 @@ func doJSON(t *testing.T, method, url string, body any, headers map[string]strin
 	}
 
 	return resp.StatusCode
+}
+
+func doRaw(t *testing.T, method, url string, body any, headers map[string]string) (int, []byte) {
+	t.Helper()
+
+	var reader io.Reader
+	if body != nil {
+		payload, err := json.Marshal(body)
+		if err != nil {
+			t.Fatalf("marshal request body: %v", err)
+		}
+		reader = bytes.NewReader(payload)
+	}
+
+	req, err := http.NewRequest(method, url, reader)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("http request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	return resp.StatusCode, data
 }
 
 func waitForTCP(address string, timeout time.Duration) error {

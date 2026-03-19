@@ -131,6 +131,11 @@ func TestInstitutionHandler_GetInstitutions(t *testing.T) {
 					return nil, errors.New("list failed")
 				},
 			},
+			as: &mockAuthService{
+				authorizeFn: func(ctx context.Context, reqCtx *app.RequestContext, apiKey string, perm *permissions.Permission) (bool, error) {
+					return true, nil
+				},
+			},
 		}
 		c := ut.CreateUtRequestContext("GET", "/institution", nil)
 		h.GetInstitutions(ctx, c)
@@ -144,6 +149,11 @@ func TestInstitutionHandler_GetInstitutions(t *testing.T) {
 			is: &mockInstitutionService{
 				getInstitutionsFn: func(ctx context.Context) ([]dtos.InstitutionDto, error) {
 					return []dtos.InstitutionDto{{Id: 1, Name: "Brainz", Site: "https://brainz.dev"}}, nil
+				},
+			},
+			as: &mockAuthService{
+				authorizeFn: func(ctx context.Context, reqCtx *app.RequestContext, apiKey string, perm *permissions.Permission) (bool, error) {
+					return true, nil
 				},
 			},
 		}

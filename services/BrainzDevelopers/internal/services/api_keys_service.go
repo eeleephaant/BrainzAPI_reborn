@@ -4,8 +4,10 @@ import (
 	"brainz/common/dtos"
 	"brainz/common/permissions"
 
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -23,6 +25,8 @@ type ApiKeysService struct {
 	authURL    string
 	authHeader string
 }
+
+var ErrAccessDenied = errors.New("access denied")
 
 func NewApiKeysService(hc *client.Client, authURL, authHeader string) *ApiKeysService {
 	return &ApiKeysService{hc: hc, authURL: authURL, authHeader: authHeader}
@@ -127,6 +131,7 @@ func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, apiKey string, devI
 	defer protocol.ReleaseRequest(req)
 	req.SetMethod(http.MethodDelete)
 	req.SetRequestURI(aks.authURL + "/key")
+	req.Header.Set("Content-Type", "application/json")
 	if aks.authHeader != "" {
 		req.Header.Set("Authorization", aks.authHeader)
 	}
@@ -160,7 +165,10 @@ func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, apiKey string, devI
 	}
 
 	if resp.StatusCode() == http.StatusForbidden {
-		return fmt.Errorf("access denied")
+		return ErrAccessDenied
+	}
+	if bytes.Contains(bytes.ToLower(resp.Body()), []byte("access denied")) {
+		return ErrAccessDenied
 	}
 
 	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusNoContent {

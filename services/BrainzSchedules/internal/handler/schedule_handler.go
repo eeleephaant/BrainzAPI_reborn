@@ -11,7 +11,6 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +18,8 @@ type ScheduleLessonService interface {
 	DeleteLesson(ctx context.Context, lessonID int) error
 	AddLessons(ctx context.Context, dto dtos.LessonsCreateDTO) error
 	GetForDateAndInstitution(ctx context.Context, date time.Time, institutionID uint64) ([]dtos.LessonDto, error)
+	GetLessonInstitutionID(ctx context.Context, lessonID int64) (int64, error)
+	UpdateTimingsForDateAndInstitution(ctx context.Context, dto dtos.DateTimeChangeDTO) error
 }
 
 type ScheduleAuthService interface {
@@ -26,13 +27,12 @@ type ScheduleAuthService interface {
 }
 
 type ScheduleHandler struct {
-	rc *redis.Client
 	ls ScheduleLessonService
 	as ScheduleAuthService
 }
 
-func NewScheduleHandler(rc *redis.Client, ls *services.LessonService, as *services.AuthService) *ScheduleHandler {
-	return &ScheduleHandler{rc, ls, as}
+func NewScheduleHandler(ls *services.LessonService, as *services.AuthService) *ScheduleHandler {
+	return &ScheduleHandler{ls, as}
 }
 
 var (
@@ -49,7 +49,19 @@ func (sh *ScheduleHandler) DeleteLesson(ctx context.Context, c *app.RequestConte
 		})
 		return
 	}
-	isLegit, err := sh.as.Authorize(ctx, c, c.Request.Header.Get("X-Api-Key"), &permissions.Permission{Action: permissions.ActionWrite, InstitutionID: &lessonID})
+
+	institutionID, err := sh.ls.GetLessonInstitutionID(ctx, lessonID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "internal server error",
+		})
+		return
+	}
+
+	isLegit, err := sh.as.Authorize(ctx, c, c.Request.Header.Get("X-Api-Key"), &permissions.Permission{
+		Action:        permissions.ActionWrite,
+		InstitutionID: &institutionID,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "internal server error",
@@ -76,6 +88,10 @@ func (sh *ScheduleHandler) AddLessons(ctx context.Context, c *app.RequestContext
 
 	if err := c.BindAndValidate(&lsnCreateDTO); err != nil {
 		c.String(400, err.Error())
+		return
+	}
+	if err := services.ValidateLessonsCreate(lsnCreateDTO); err != nil {
+		c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	isLegit, err := sh.as.Authorize(ctx, c, c.Request.Header.Get("X-Api-Key"), &permissions.Permission{Action: permissions.ActionWrite, InstitutionID: &lsnCreateDTO.InstitutionID})
@@ -147,4 +163,43 @@ func (sh *ScheduleHandler) GetLessons(ctx context.Context, c *app.RequestContext
 	}
 
 	c.JSON(http.StatusOK, lessons)
+}
+
+func (sh *ScheduleHandler) UpdateLessonTimingsForDate(ctx context.Context, c *app.RequestContext) {
+	changeDTO := dtos.DateTimeChangeDTO{}
+	if err := c.BindAndValidate(&changeDTO); err != nil {
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
+	if changeDTO.InstitutionID == 0 {
+		c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "institution_id must be positive",
+		})
+		return
+	}
+
+	instID64 := int64(changeDTO.InstitutionID)
+	isLegit, err := sh.as.Authorize(ctx, c, c.Request.Header.Get("X-Api-Key"), &permissions.Permission{
+		Action:        permissions.ActionWrite,
+		InstitutionID: &instID64,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "internal server error",
+		})
+		return
+	}
+	if !isLegit {
+		c.Status(http.StatusForbidden)
+		return
+	}
+
+	if err := sh.ls.UpdateTimingsForDateAndInstitution(ctx, changeDTO); err != nil {
+		c.JSON(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.Status(http.StatusOK)
 }

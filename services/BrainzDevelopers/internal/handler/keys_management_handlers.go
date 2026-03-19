@@ -6,6 +6,7 @@ import (
 	"brainz/developersapi/internal/entity"
 	"brainz/developersapi/internal/services"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -122,6 +123,10 @@ func (k *KeysManagementHandler) DeleteApiKey(ctx context.Context, c *app.Request
 	}
 	err = k.ks.RemoveApiKey(ctx, apiKeyStr, session.DeveloperID.String())
 	if err != nil {
+		if errors.Is(err, services.ErrAccessDenied) {
+			c.JSON(403, map[string]string{"error": "access denied"})
+			return
+		}
 		c.JSON(500, map[string]string{"error": "internal server error"})
 		zap.L().Error("Internal server error", zap.Error(err))
 		return

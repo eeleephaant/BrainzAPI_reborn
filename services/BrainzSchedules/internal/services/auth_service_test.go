@@ -25,9 +25,12 @@ func TestAuthService_Authorize(t *testing.T) {
 		baseURL, _ := url.Parse("http://127.0.0.1:1")
 		svc := NewAuthService(baseURL)
 
-		_, err := svc.Authorize(context.Background(), makeReqCtx(), "", &permissions.Permission{Action: permissions.ActionRead})
-		if err == nil || !strings.Contains(err.Error(), "api key is required") {
-			t.Fatalf("error = %v, want api key is required", err)
+		ok, err := svc.Authorize(context.Background(), makeReqCtx(), "", &permissions.Permission{Action: permissions.ActionRead})
+		if err != nil {
+			t.Fatalf("err = %v, want nil", err)
+		}
+		if ok {
+			t.Fatalf("ok = %v, want false", ok)
 		}
 	})
 

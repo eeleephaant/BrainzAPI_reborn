@@ -61,6 +61,16 @@ func (ih *InstitutionHandler) CreateInstitution(ctx context.Context, c *app.Requ
 }
 
 func (ih *InstitutionHandler) GetInstitutions(ctx context.Context, c *app.RequestContext) {
+	isLegit, err := ih.as.Authorize(ctx, c, c.Request.Header.Get("X-Api-Key"), &permissions.Permission{Action: permissions.ActionRead, InstitutionID: nil})
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		zap.L().Error("Failed authorize token", zap.Error(err))
+		return
+	}
+	if !isLegit {
+		c.Status(consts.StatusForbidden)
+		return
+	}
 	instDTOs, err := ih.is.GetInstitutions(ctx)
 	if err != nil {
 		c.JSON(consts.StatusInternalServerError, map[string]string{"error": "internal server error"})

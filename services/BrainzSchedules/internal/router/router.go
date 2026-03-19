@@ -19,6 +19,7 @@ func Register(ctx context.Context,
 	// REST
 	h.GET("/lessons", sh.GetLessons)
 	h.POST("/lessons", sh.AddLessons)
+	h.PUT("/lessons/timings", sh.UpdateLessonTimingsForDate)
 	h.GET("/institution", ih.GetInstitutions)
 	h.POST("/institution", ih.CreateInstitution)
 	h.GET("/group", gh.GetGroupsForInst)

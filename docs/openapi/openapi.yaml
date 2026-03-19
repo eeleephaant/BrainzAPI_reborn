@@ -166,6 +166,51 @@ components:
     Lesson:
       type: object
       additionalProperties: true
+    LessonTiming:
+      type: object
+      properties:
+        start_time:
+          type: string
+          format: date-time
+          description: Time of day; date part is ignored by service logic.
+          example: "0001-01-01T08:30:00Z"
+        end_time:
+          type: string
+          format: date-time
+          description: Time of day; date part is ignored by service logic.
+          example: "0001-01-01T10:00:00Z"
+      required: [start_time, end_time]
+    LessonsTimings:
+      type: object
+      properties:
+        lesson_1:
+          $ref: "#/components/schemas/LessonTiming"
+        lesson_2:
+          $ref: "#/components/schemas/LessonTiming"
+        lesson_3:
+          $ref: "#/components/schemas/LessonTiming"
+        lesson_4:
+          $ref: "#/components/schemas/LessonTiming"
+        lesson_5:
+          $ref: "#/components/schemas/LessonTiming"
+        lesson_6:
+          $ref: "#/components/schemas/LessonTiming"
+      required: [lesson_1, lesson_2, lesson_3, lesson_4, lesson_5, lesson_6]
+    DateTimeChangeDTO:
+      type: object
+      properties:
+        institution_id:
+          type: integer
+          format: int64
+          minimum: 1
+        date:
+          type: string
+          format: date-time
+          description: Target date whose lessons will be updated.
+          example: "2026-03-20T00:00:00Z"
+        lesson_timings:
+          $ref: "#/components/schemas/LessonsTimings"
+      required: [institution_id, date, lesson_timings]
 
 paths:
   /auth:
@@ -538,6 +583,41 @@ paths:
             text/plain:
               schema:
                 type: string
+
+  /lessons/timings:
+    put:
+      tags: [schedules]
+      servers:
+        - url: http://127.0.0.1:8080
+      summary: Update lesson timings 1..6 for a date and institution (requires write)
+      description: |
+        Updates start/end times for lessons with numbers 1..6 on the specified day.
+        The service applies date from `date` and time-of-day from `lesson_timings.lesson_N`.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DateTimeChangeDTO"
+      responses:
+        "200":
+          description: Timings updated
+        "400":
+          description: Invalid payload or timings validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /parse:
     post:

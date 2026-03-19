@@ -11,6 +11,8 @@ import (
 
 type mockLessonRepository struct {
 	deleteFn                func(ctx context.Context, id int64) error
+	getByIDFn               func(ctx context.Context, id int64) (*models.Lesson, error)
+	updateFn                func(ctx context.Context, lesson *models.Lesson) error
 	batchCreateFn           func(ctx context.Context, lessons []*models.Lesson) ([]int64, error)
 	listForDayInstitutionFn func(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error)
 }
@@ -20,11 +22,17 @@ func (m *mockLessonRepository) Create(ctx context.Context, lesson *models.Lesson
 }
 
 func (m *mockLessonRepository) GetByID(ctx context.Context, id int64) (*models.Lesson, error) {
-	return nil, nil
+	if m.getByIDFn == nil {
+		return nil, nil
+	}
+	return m.getByIDFn(ctx, id)
 }
 
 func (m *mockLessonRepository) Update(ctx context.Context, lesson *models.Lesson) error {
-	return nil
+	if m.updateFn == nil {
+		return nil
+	}
+	return m.updateFn(ctx, lesson)
 }
 
 func (m *mockLessonRepository) Delete(ctx context.Context, id int64) error {
@@ -98,6 +106,29 @@ func TestLessonService_AddLessons(t *testing.T) {
 			},
 		},
 	}
+
+	t.Run("validation_error", func(t *testing.T) {
+		svc := &LessonService{
+			gr: &mockGroupRepository{
+				getListForInstitutionFn: func(ctx context.Context, instID int64) ([]models.Group, error) {
+					t.Fatal("group repo should not be called on validation error")
+					return nil, nil
+				},
+			},
+			lr: &mockLessonRepository{
+				deleteFn:      func(ctx context.Context, id int64) error { return nil },
+				batchCreateFn: func(ctx context.Context, lessons []*models.Lesson) ([]int64, error) { return nil, nil },
+				listForDayInstitutionFn: func(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error) {
+					return nil, nil
+				},
+			},
+		}
+		bad := dto
+		bad.Lessons = nil
+		if err := svc.AddLessons(context.Background(), bad); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
 
 	t.Run("success", func(t *testing.T) {
 		var created []*models.Lesson
@@ -250,6 +281,141 @@ func TestLessonService_GetForDateAndInstitution(t *testing.T) {
 
 		_, err := svc.GetForDateAndInstitution(context.Background(), start, 10)
 		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestLessonService_GetLessonInstitutionID(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		svc := &LessonService{
+			lr: &mockLessonRepository{
+				getByIDFn: func(ctx context.Context, id int64) (*models.Lesson, error) {
+					return &models.Lesson{ID: id, InstitutionID: 55}, nil
+				},
+				deleteFn:      func(ctx context.Context, id int64) error { return nil },
+				batchCreateFn: func(ctx context.Context, lessons []*models.Lesson) ([]int64, error) { return nil, nil },
+				listForDayInstitutionFn: func(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error) {
+					return nil, nil
+				},
+			},
+		}
+
+		got, err := svc.GetLessonInstitutionID(context.Background(), 123)
+		if err != nil {
+			t.Fatalf("GetLessonInstitutionID error = %v", err)
+		}
+		if got != 55 {
+			t.Fatalf("institution id = %d, want %d", got, 55)
+		}
+	})
+
+	t.Run("repo_error", func(t *testing.T) {
+		wantErr := errors.New("get failed")
+		svc := &LessonService{
+			lr: &mockLessonRepository{
+				getByIDFn: func(ctx context.Context, id int64) (*models.Lesson, error) {
+					return nil, wantErr
+				},
+				deleteFn:      func(ctx context.Context, id int64) error { return nil },
+				batchCreateFn: func(ctx context.Context, lessons []*models.Lesson) ([]int64, error) { return nil, nil },
+				listForDayInstitutionFn: func(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error) {
+					return nil, nil
+				},
+			},
+		}
+
+		_, err := svc.GetLessonInstitutionID(context.Background(), 123)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestLessonService_UpdateTimingsForDateAndInstitution(t *testing.T) {
+	date := time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC)
+	dto := dtos.DateTimeChangeDTO{
+		InstitutionID: 7,
+		Date:          date,
+		LessonTimings: dtos.LessonsTimings{
+			Lesson1: dtos.LessonTiming{StartTime: time.Date(1, 1, 1, 8, 30, 0, 0, time.UTC), EndTime: time.Date(1, 1, 1, 10, 0, 0, 0, time.UTC)},
+			Lesson2: dtos.LessonTiming{StartTime: time.Date(1, 1, 1, 10, 10, 0, 0, time.UTC), EndTime: time.Date(1, 1, 1, 11, 40, 0, 0, time.UTC)},
+			Lesson3: dtos.LessonTiming{StartTime: time.Date(1, 1, 1, 12, 0, 0, 0, time.UTC), EndTime: time.Date(1, 1, 1, 13, 30, 0, 0, time.UTC)},
+			Lesson4: dtos.LessonTiming{StartTime: time.Date(1, 1, 1, 13, 40, 0, 0, time.UTC), EndTime: time.Date(1, 1, 1, 15, 10, 0, 0, time.UTC)},
+			Lesson5: dtos.LessonTiming{StartTime: time.Date(1, 1, 1, 15, 20, 0, 0, time.UTC), EndTime: time.Date(1, 1, 1, 16, 50, 0, 0, time.UTC)},
+			Lesson6: dtos.LessonTiming{StartTime: time.Date(1, 1, 1, 17, 0, 0, 0, time.UTC), EndTime: time.Date(1, 1, 1, 18, 30, 0, 0, time.UTC)},
+		},
+	}
+
+	t.Run("validation_error", func(t *testing.T) {
+		bad := dto
+		bad.InstitutionID = 0
+		svc := &LessonService{lr: &mockLessonRepository{}}
+		if err := svc.UpdateTimingsForDateAndInstitution(context.Background(), bad); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("list_error", func(t *testing.T) {
+		wantErr := errors.New("list failed")
+		svc := &LessonService{
+			lr: &mockLessonRepository{
+				listForDayInstitutionFn: func(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error) {
+					return nil, wantErr
+				},
+			},
+		}
+		if err := svc.UpdateTimingsForDateAndInstitution(context.Background(), dto); !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("success_updates_by_lesson_num", func(t *testing.T) {
+		lessons := []*models.Lesson{
+			{ID: 1, Num: 1, InstitutionID: 7, StartTime: date, EndTime: date},
+			{ID: 2, Num: 2, InstitutionID: 7, StartTime: date, EndTime: date},
+		}
+		updated := map[int64]*models.Lesson{}
+		svc := &LessonService{
+			lr: &mockLessonRepository{
+				listForDayInstitutionFn: func(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error) {
+					return lessons, nil
+				},
+				updateFn: func(ctx context.Context, lesson *models.Lesson) error {
+					cp := *lesson
+					updated[lesson.ID] = &cp
+					return nil
+				},
+			},
+		}
+
+		if err := svc.UpdateTimingsForDateAndInstitution(context.Background(), dto); err != nil {
+			t.Fatalf("UpdateTimingsForDateAndInstitution error = %v", err)
+		}
+		if len(updated) != 2 {
+			t.Fatalf("updated count = %d, want 2", len(updated))
+		}
+		if updated[1].StartTime.Hour() != 8 || updated[1].StartTime.Minute() != 30 {
+			t.Fatalf("lesson1 start = %v, want 08:30", updated[1].StartTime)
+		}
+		if updated[1].StartTime.Day() != 20 || updated[1].StartTime.Month() != time.March || updated[1].StartTime.Year() != 2026 {
+			t.Fatalf("lesson1 start date = %v, want 2026-03-20", updated[1].StartTime)
+		}
+	})
+
+	t.Run("update_error", func(t *testing.T) {
+		wantErr := errors.New("update failed")
+		svc := &LessonService{
+			lr: &mockLessonRepository{
+				listForDayInstitutionFn: func(ctx context.Context, date time.Time, institutionID uint64) ([]*models.Lesson, error) {
+					return []*models.Lesson{{ID: 1, Num: 1, InstitutionID: 7}}, nil
+				},
+				updateFn: func(ctx context.Context, lesson *models.Lesson) error {
+					return wantErr
+				},
+			},
+		}
+		if err := svc.UpdateTimingsForDateAndInstitution(context.Background(), dto); !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
 	})

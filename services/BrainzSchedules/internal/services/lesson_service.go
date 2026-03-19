@@ -18,7 +18,43 @@ func NewLessonService(lr repositories.LessonRepositoryInterface, gr *repositorie
 	return &LessonService{lr, gr}
 }
 
-func (ls *LessonService) UpdateTimingsForDateAndInstitution(ctx context.Context, date dtos.LessonsTimings, institutionID uint) error {
+func (ls *LessonService) UpdateTimingsForDateAndInstitution(ctx context.Context, dto dtos.DateTimeChangeDTO) error {
+	if dto.InstitutionID == 0 {
+		return fmt.Errorf("institution_id must be positive")
+	}
+
+	timingsByNum := map[uint8]dtos.LessonTiming{
+		1: dto.LessonTimings.Lesson1,
+		2: dto.LessonTimings.Lesson2,
+		3: dto.LessonTimings.Lesson3,
+		4: dto.LessonTimings.Lesson4,
+		5: dto.LessonTimings.Lesson5,
+		6: dto.LessonTimings.Lesson6,
+	}
+
+	for num, timing := range timingsByNum {
+		if !timing.StartTime.Before(timing.EndTime) {
+			return fmt.Errorf("lesson_%d start_time must be before end_time", num)
+		}
+	}
+
+	lsModels, err := ls.lr.ListForDayAndInstitution(ctx, dto.Date, dto.InstitutionID)
+	if err != nil {
+		return err
+	}
+
+	for _, l := range lsModels {
+		timing, ok := timingsByNum[l.Num]
+		if !ok {
+			continue
+		}
+		l.StartTime = mergeDateAndClock(dto.Date, timing.StartTime)
+		l.EndTime = mergeDateAndClock(dto.Date, timing.EndTime)
+		if err := ls.lr.Update(ctx, l); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -30,7 +66,19 @@ func (ls *LessonService) DeleteLesson(ctx context.Context, lessonID int) error {
 	return nil
 }
 
+func (ls *LessonService) GetLessonInstitutionID(ctx context.Context, lessonID int64) (int64, error) {
+	lesson, err := ls.lr.GetByID(ctx, lessonID)
+	if err != nil {
+		return 0, err
+	}
+	return int64(lesson.InstitutionID), nil
+}
+
 func (ls *LessonService) AddLessons(ctx context.Context, dto dtos.LessonsCreateDTO) error {
+	if err := ValidateLessonsCreate(dto); err != nil {
+		return err
+	}
+
 	instGroups, err := ls.gr.GetListForInstitution(ctx, int64(dto.InstitutionID))
 	if err != nil {
 		return err
@@ -90,4 +138,12 @@ func (ls *LessonService) GetForDateAndInstitution(ctx context.Context, date time
 		})
 	}
 	return listDTOs, nil
+}
+
+func mergeDateAndClock(date time.Time, clock time.Time) time.Time {
+	return time.Date(
+		date.Year(), date.Month(), date.Day(),
+		clock.Hour(), clock.Minute(), clock.Second(), clock.Nanosecond(),
+		date.Location(),
+	)
 }
