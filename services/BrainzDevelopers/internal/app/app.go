@@ -21,8 +21,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	hostPort := fmt.Sprintf("%s:%d", cfg.App.Address, cfg.App.Port)
 	h := server.Default(server.WithHostPorts(hostPort))
 
-	// Enable CORS for browser clients (temporarily allow all origins).
-	h.Use(cors.Default())
+	// CORS for browser clients: any origin, any request header on preflight (e.g. X-Session-Token), expose response headers to JS.
+	corsCfg := cors.DefaultConfig()
+	corsCfg.AllowAllOrigins = true
+	corsCfg.AllowHeaders = []string{"*"}
+	corsCfg.ExposeHeaders = []string{"*"}
+	h.Use(cors.New(corsCfg))
 
 	psqlPool, err := storage.ConnectPostgres(ctx, &cfg.Postgres)
 	if err != nil {

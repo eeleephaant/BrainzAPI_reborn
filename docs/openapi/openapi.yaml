@@ -6,11 +6,17 @@ info:
     Combined OpenAPI spec for BrainzAPI microservices.
     Note: services run on different hosts/ports; each operation has its own `servers`.
 
+    **BrainzDevelopers** (port 3333 in local compose): CORS is enabled for browser apps — `Access-Control-Allow-Origin: *`,
+    `Access-Control-Allow-Headers: *`, `Access-Control-Expose-Headers: *`, and usual methods on OPTIONS preflight.
+    Use `X-Session-Token` for session-scoped routes (`/key`, `/keys` on that host).
+
 tags:
   - name: auth
     description: BrainzAuth service
   - name: developers
-    description: BrainzDevelopers service
+    description: |
+      Developer registration, login, and session-based API key helpers (default local base `http://127.0.0.1:3333`).
+      Session routes require header `X-Session-Token` (`SessionTokenHeader`). CORS allows arbitrary request headers from the browser; see top-level `info.description`.
   - name: schedules
     description: BrainzSchedules service
   - name: parser
