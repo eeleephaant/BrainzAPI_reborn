@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -15,20 +16,23 @@ import (
 type AuthUserService interface {
 	Authenticate(ctx context.Context, email, password string) (*entity.DeveloperAccount, error)
 	RegistrateUser(ctx context.Context, registerDto *dtos.RegisterDto) (*entity.EmailConfirmationToken, error)
+	GetById(ctx context.Context, devId uuid.UUID) (*entity.DeveloperAccount, error)
 }
 
 // AuthSessionService is the subset of SessionService used by AuthHandler (for testing).
 type AuthSessionService interface {
 	CreateNew(ctx context.Context, user *entity.DeveloperAccount, userAgent string, ipAddr string) (*entity.Session, *string, error)
+	ValidateToken(ctx context.Context, token string, ipAddr string) (*entity.Session, error)
 }
 
 type AuthHandler struct {
 	Us AuthUserService
 	Ss AuthSessionService
+	SC SessionHTTPConfig
 }
 
-func NewAuthHandler(us AuthUserService, ss AuthSessionService) *AuthHandler {
-	return &AuthHandler{Us: us, Ss: ss}
+func NewAuthHandler(us AuthUserService, ss AuthSessionService, sc SessionHTTPConfig) *AuthHandler {
+	return &AuthHandler{Us: us, Ss: ss, SC: sc}
 }
 
 // Ensure concrete types satisfy interfaces.
@@ -69,8 +73,10 @@ func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 	_, token, err := h.Ss.CreateNew(ctx, account, string(c.UserAgent()), c.ClientIP())
 	if err != nil {
 		c.JSON(500, map[string]string{"error": "internal server error"})
+		return
 	}
 
+	h.SC.SetSessionCookie(c, *token)
 	c.JSON(200, map[string]string{"token": *token})
 }
 
@@ -100,4 +106,21 @@ func (h *AuthHandler) Register(ctx context.Context, c *app.RequestContext) {
 
 	_ = ect // email confirmation disabled
 	c.JSON(201, map[string]string{"message": "User created"})
+}
+
+func (h *AuthHandler) GetProfile(ctx context.Context, c *app.RequestContext) {
+	sessionToken := h.SC.TokenFromRequest(c)
+	session, err := h.Ss.ValidateToken(ctx, sessionToken, c.ClientIP())
+	if err != nil || session == nil {
+		c.JSON(400, map[string]string{"error": "invalid session token"})
+		zap.L().Error("Invalid session token", zap.Error(err))
+		return
+	}
+	user, err := h.Us.GetById(ctx, session.DeveloperID)
+	if err != nil {
+		c.JSON(500, map[string]string{"error": "internal server error"})
+		zap.L().Error("GetProfile load user", zap.Error(err))
+		return
+	}
+	c.JSON(200, dtos.NewProfileResponse(user))
 }

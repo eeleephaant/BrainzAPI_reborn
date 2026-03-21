@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 type mockAuthUserService struct {
 	authenticate   func(ctx context.Context, email, password string) (*entity.DeveloperAccount, error)
 	registrateUser func(ctx context.Context, registerDto *dtos.RegisterDto) (*entity.EmailConfirmationToken, error)
+	getByID        func(ctx context.Context, devID uuid.UUID) (*entity.DeveloperAccount, error)
 }
 
 func (m *mockAuthUserService) Authenticate(ctx context.Context, email, password string) (*entity.DeveloperAccount, error) {
@@ -33,8 +35,16 @@ func (m *mockAuthUserService) RegistrateUser(ctx context.Context, registerDto *d
 	return nil, errors.New("not implemented")
 }
 
+func (m *mockAuthUserService) GetById(ctx context.Context, devID uuid.UUID) (*entity.DeveloperAccount, error) {
+	if m.getByID != nil {
+		return m.getByID(ctx, devID)
+	}
+	return nil, errors.New("not implemented")
+}
+
 type mockAuthSessionService struct {
-	createNew func(ctx context.Context, user *entity.DeveloperAccount, userAgent, ipAddr string) (*entity.Session, *string, error)
+	createNew     func(ctx context.Context, user *entity.DeveloperAccount, userAgent, ipAddr string) (*entity.Session, *string, error)
+	validateToken func(ctx context.Context, token string, ipAddr string) (*entity.Session, error)
 }
 
 func (m *mockAuthSessionService) CreateNew(ctx context.Context, user *entity.DeveloperAccount, userAgent, ipAddr string) (*entity.Session, *string, error) {
@@ -45,13 +55,20 @@ func (m *mockAuthSessionService) CreateNew(ctx context.Context, user *entity.Dev
 	return &entity.Session{ID: uuid.New(), DeveloperID: user.ID}, &tok, nil
 }
 
+func (m *mockAuthSessionService) ValidateToken(ctx context.Context, token string, ipAddr string) (*entity.Session, error) {
+	if m.validateToken != nil {
+		return m.validateToken(ctx, token, ipAddr)
+	}
+	return nil, errors.New("invalid session")
+}
+
 func TestAuthHandler_Login(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("invalid_request_400", func(t *testing.T) {
 		us := &mockAuthUserService{}
 		ss := &mockAuthSessionService{}
-		h := NewAuthHandler(us, ss)
+		h := NewAuthHandler(us, ss, SessionHTTPConfig{})
 		body := []byte(`{}`)
 		c := ut.CreateUtRequestContext("POST", "/login", &ut.Body{Body: bytes.NewReader(body), Len: len(body)},
 			ut.Header{Key: "Content-Type", Value: "application/json"})
@@ -68,7 +85,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			},
 		}
 		ss := &mockAuthSessionService{}
-		h := NewAuthHandler(us, ss)
+		h := NewAuthHandler(us, ss, SessionHTTPConfig{})
 		body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "password123456"})
 		c := ut.CreateUtRequestContext("POST", "/login", &ut.Body{Body: bytes.NewReader(body), Len: len(body)},
 			ut.Header{Key: "Content-Type", Value: "application/json"})
@@ -85,7 +102,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			},
 		}
 		ss := &mockAuthSessionService{}
-		h := NewAuthHandler(us, ss)
+		h := NewAuthHandler(us, ss, SessionHTTPConfig{})
 		body, _ := json.Marshal(map[string]string{"email": "a@b.com", "password": "password123456"})
 		c := ut.CreateUtRequestContext("POST", "/login", &ut.Body{Body: bytes.NewReader(body), Len: len(body)},
 			ut.Header{Key: "Content-Type", Value: "application/json"})
@@ -108,7 +125,7 @@ func TestAuthHandler_Login(t *testing.T) {
 				return &entity.Session{ID: uuid.New(), DeveloperID: user.ID}, &tok, nil
 			},
 		}
-		h := NewAuthHandler(us, ss)
+		h := NewAuthHandler(us, ss, SessionHTTPConfig{})
 		body, _ := json.Marshal(map[string]string{"email": "ok@test.com", "password": "password123456"})
 		c := ut.CreateUtRequestContext("POST", "/login", &ut.Body{Body: bytes.NewReader(body), Len: len(body)},
 			ut.Header{Key: "Content-Type", Value: "application/json"})
@@ -119,6 +136,95 @@ func TestAuthHandler_Login(t *testing.T) {
 		if !bytes.Contains(c.Response.Body(), []byte("session-token-123")) {
 			t.Errorf("body should contain token, got %s", c.Response.Body())
 		}
+		setCookie := string(c.Response.Header.Peek("Set-Cookie"))
+		if !strings.Contains(setCookie, "brainz_session=") || !strings.Contains(setCookie, "session-token-123") {
+			t.Errorf("Set-Cookie should include HttpOnly session cookie, got %q", setCookie)
+		}
+	})
+}
+
+func TestAuthHandler_GetProfile(t *testing.T) {
+	ctx := context.Background()
+	devID := uuid.New()
+	created := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	t.Run("invalid_session_400", func(t *testing.T) {
+		h := NewAuthHandler(&mockAuthUserService{}, &mockAuthSessionService{
+			validateToken: func(ctx context.Context, token string, ipAddr string) (*entity.Session, error) {
+				return nil, errors.New("bad")
+			},
+		}, SessionHTTPConfig{})
+		c := ut.CreateUtRequestContext("GET", "/profile", nil,
+			ut.Header{Key: "X-Forwarded-For", Value: "127.0.0.1"})
+		c.Request.Header.Set("X-Session-Token", "bad")
+		h.GetProfile(ctx, c)
+		if c.Response.StatusCode() != 400 {
+			t.Fatalf("status = %d, want 400", c.Response.StatusCode())
+		}
+	})
+
+	t.Run("get_user_error_500", func(t *testing.T) {
+		h := NewAuthHandler(&mockAuthUserService{
+			getByID: func(ctx context.Context, id uuid.UUID) (*entity.DeveloperAccount, error) {
+				return nil, errors.New("db")
+			},
+		}, &mockAuthSessionService{
+			validateToken: func(ctx context.Context, token string, ipAddr string) (*entity.Session, error) {
+				return &entity.Session{DeveloperID: devID}, nil
+			},
+		}, SessionHTTPConfig{})
+		c := ut.CreateUtRequestContext("GET", "/profile", nil,
+			ut.Header{Key: "X-Forwarded-For", Value: "127.0.0.1"})
+		c.Request.Header.Set("X-Session-Token", "ok")
+		h.GetProfile(ctx, c)
+		if c.Response.StatusCode() != 500 {
+			t.Fatalf("status = %d, want 500", c.Response.StatusCode())
+		}
+	})
+
+	t.Run("success_200", func(t *testing.T) {
+		secret := []byte{1}
+		acc := &entity.DeveloperAccount{
+			ID:               devID,
+			Email:            "p@test.com",
+			EmailConfirmedAt: nil,
+			CreatedAt:        created,
+			RoleId:           1,
+			BannedAt:         nil,
+			TwoFactorSecret:  &secret,
+		}
+		h := NewAuthHandler(&mockAuthUserService{
+			getByID: func(ctx context.Context, id uuid.UUID) (*entity.DeveloperAccount, error) {
+				if id != devID {
+					t.Fatalf("dev id = %v, want %v", id, devID)
+				}
+				return acc, nil
+			},
+		}, &mockAuthSessionService{
+			validateToken: func(ctx context.Context, token string, ipAddr string) (*entity.Session, error) {
+				return &entity.Session{DeveloperID: devID}, nil
+			},
+		}, SessionHTTPConfig{})
+		c := ut.CreateUtRequestContext("GET", "/profile", nil,
+			ut.Header{Key: "X-Forwarded-For", Value: "127.0.0.1"})
+		c.Request.Header.Set("X-Session-Token", "ok")
+		h.GetProfile(ctx, c)
+		if c.Response.StatusCode() != 200 {
+			t.Fatalf("status = %d, want 200", c.Response.StatusCode())
+		}
+		var out struct {
+			ID               string `json:"id"`
+			Email            string `json:"email"`
+			RoleId           uint   `json:"role_id"`
+			TwoFactorEnabled bool   `json:"two_factor_enabled"`
+			CreatedAt        string `json:"created_at"`
+		}
+		if err := json.Unmarshal(c.Response.Body(), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if out.ID != devID.String() || out.Email != "p@test.com" || out.RoleId != 1 || !out.TwoFactorEnabled {
+			t.Fatalf("body = %+v", out)
+		}
 	})
 }
 
@@ -128,7 +234,7 @@ func TestAuthHandler_Register(t *testing.T) {
 	t.Run("invalid_request_400", func(t *testing.T) {
 		us := &mockAuthUserService{}
 		ss := &mockAuthSessionService{}
-		h := NewAuthHandler(us, ss)
+		h := NewAuthHandler(us, ss, SessionHTTPConfig{})
 		body := []byte(`{"email":"bad"}`) // short password
 		c := ut.CreateUtRequestContext("POST", "/register", &ut.Body{Body: bytes.NewReader(body), Len: len(body)},
 			ut.Header{Key: "Content-Type", Value: "application/json"})
@@ -145,7 +251,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			},
 		}
 		ss := &mockAuthSessionService{}
-		h := NewAuthHandler(us, ss)
+		h := NewAuthHandler(us, ss, SessionHTTPConfig{})
 		body, _ := json.Marshal(map[string]string{"email": "exists@test.com", "password": "securepassword123"})
 		c := ut.CreateUtRequestContext("POST", "/register", &ut.Body{Body: bytes.NewReader(body), Len: len(body)},
 			ut.Header{Key: "Content-Type", Value: "application/json"})
@@ -165,7 +271,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			},
 		}
 		ss := &mockAuthSessionService{}
-		h := NewAuthHandler(us, ss)
+		h := NewAuthHandler(us, ss, SessionHTTPConfig{})
 		body, _ := json.Marshal(map[string]string{"email": "new@test.com", "password": "securepassword123"})
 		c := ut.CreateUtRequestContext("POST", "/register", &ut.Body{Body: bytes.NewReader(body), Len: len(body)},
 			ut.Header{Key: "Content-Type", Value: "application/json"})

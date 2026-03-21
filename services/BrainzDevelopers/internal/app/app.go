@@ -10,23 +10,65 @@ import (
 	"brainz/developersapi/internal/storage"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/hertz-contrib/cors"
 	"go.uber.org/zap"
 )
+
+func sessionHTTPFromConfig(cfg *config.Config) handler.SessionHTTPConfig {
+	return handler.NewSessionHTTPConfig(
+		cfg.SessionCookieName,
+		cfg.SessionCookieDomain,
+		cfg.SessionCookiePath,
+		cfg.SessionCookieMaxAge,
+		cfg.SessionCookieSecure,
+		parseCookieSameSite(cfg.SessionCookieSameSite),
+	)
+}
+
+func parseCookieSameSite(s string) protocol.CookieSameSite {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "none":
+		return protocol.CookieSameSiteNoneMode
+	case "strict":
+		return protocol.CookieSameSiteStrictMode
+	case "lax", "":
+		return protocol.CookieSameSiteLaxMode
+	default:
+		return protocol.CookieSameSiteLaxMode
+	}
+}
+
+func corsFromConfig(cfg *config.Config) *cors.Config {
+	corsCfg := cors.DefaultConfig()
+	corsCfg.AllowAllOrigins = false
+	corsCfg.AllowCredentials = true
+	corsCfg.AllowHeaders = []string{"*"}
+	corsCfg.ExposeHeaders = []string{"*"}
+
+	allowed := cfg.CorsOriginSet()
+	if len(allowed) == 0 {
+		// Dev: reflect any non-empty Origin (not "*"), required when the browser sends credentials.
+		corsCfg.AllowOriginFunc = func(origin string) bool {
+			return origin != ""
+		}
+	} else {
+		corsCfg.AllowOriginFunc = func(origin string) bool {
+			return allowed[origin]
+		}
+	}
+	return &corsCfg
+}
 
 func Run(ctx context.Context, cfg *config.Config) error {
 	hostPort := fmt.Sprintf("%s:%d", cfg.App.Address, cfg.App.Port)
 	h := server.Default(server.WithHostPorts(hostPort))
 
-	// CORS for browser clients: any origin, any request header on preflight (e.g. X-Session-Token), expose response headers to JS.
-	corsCfg := cors.DefaultConfig()
-	corsCfg.AllowAllOrigins = true
-	corsCfg.AllowHeaders = []string{"*"}
-	corsCfg.ExposeHeaders = []string{"*"}
-	h.Use(cors.New(corsCfg))
+	h.Use(cors.New(*corsFromConfig(cfg)))
 
 	psqlPool, err := storage.ConnectPostgres(ctx, &cfg.Postgres)
 	if err != nil {
@@ -47,8 +89,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	us := services.NewUserService(ur)
 	aks := services.NewApiKeysService(hc, "http://brainz-auth:8080", "")
 
-	ah := handler.NewAuthHandler(us, ss)
-	kmh := handler.NewKeysManagementHandler(aks, ss, us)
+	sc := sessionHTTPFromConfig(cfg)
+	ah := handler.NewAuthHandler(us, ss, sc)
+	kmh := handler.NewKeysManagementHandler(aks, ss, us, sc)
 
 	router.Register(h, ah, kmh)
 

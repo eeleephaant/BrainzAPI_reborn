@@ -29,9 +29,10 @@ func (m *mockKeysSession) ValidateToken(ctx context.Context, token string, ipAdd
 }
 
 type mockKeysAPI struct {
-	getFn    func(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyShareModel, error)
-	createFn func(ctx context.Context, issuer, developerID uuid.UUID, name string, perms []permissions.Permission, ipWhitelist []string) (*dtos.ApiKeyCreateResponse, error)
-	removeFn func(ctx context.Context, apiKey, devID string) error
+	getFn      func(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyShareModel, error)
+	getUsageFn func(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyUsageStats, error)
+	createFn   func(ctx context.Context, issuer, developerID uuid.UUID, name string, perms []permissions.Permission, ipWhitelist []string) (*dtos.ApiKeyCreateResponse, error)
+	removeFn   func(ctx context.Context, apiKey, devID string) error
 }
 
 func (m *mockKeysAPI) GetApiKeys(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyShareModel, error) {
@@ -39,6 +40,13 @@ func (m *mockKeysAPI) GetApiKeys(ctx context.Context, developerID uuid.UUID) ([]
 		return nil, nil
 	}
 	return m.getFn(ctx, developerID)
+}
+
+func (m *mockKeysAPI) GetApiKeysUsage(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyUsageStats, error) {
+	if m.getUsageFn == nil {
+		return nil, nil
+	}
+	return m.getUsageFn(ctx, developerID)
 }
 
 func (m *mockKeysAPI) CreateApiKey(ctx context.Context, issuer, developerID uuid.UUID, name string, perms []permissions.Permission, ipWhitelist []string) (*dtos.ApiKeyCreateResponse, error) {
@@ -141,6 +149,82 @@ func TestKeysManagementHandler_GetApiKeys(t *testing.T) {
 		}
 		if len(out.Keys) != 1 {
 			t.Fatalf("len(keys) = %d, want 1", len(out.Keys))
+		}
+	})
+}
+
+func newUsageCtx(path string) *app.RequestContext {
+	return ut.CreateUtRequestContext("GET", path, nil, ut.Header{Key: "X-Forwarded-For", Value: "127.0.0.1"})
+}
+
+func TestKeysManagementHandler_GetApiKeysUsage(t *testing.T) {
+	ctx := context.Background()
+	devID := uuid.New()
+
+	t.Run("developer_id_query_forbidden_400", func(t *testing.T) {
+		h := &KeysManagementHandler{ks: &mockKeysAPI{}}
+		c := newUsageCtx("/keys/usage?developer_id=" + devID.String())
+		c.Request.Header.Set("X-Session-Token", "ok")
+		h.GetApiKeysUsage(ctx, c)
+		if c.Response.StatusCode() != 400 {
+			t.Fatalf("status = %d, want 400", c.Response.StatusCode())
+		}
+	})
+
+	t.Run("missing_token_401", func(t *testing.T) {
+		h := &KeysManagementHandler{ss: &mockKeysSession{}}
+		c := newUsageCtx("/keys/usage")
+		h.GetApiKeysUsage(ctx, c)
+		if c.Response.StatusCode() != 401 {
+			t.Fatalf("status = %d, want 401", c.Response.StatusCode())
+		}
+	})
+
+	t.Run("invalid_session_401", func(t *testing.T) {
+		h := &KeysManagementHandler{
+			ss: &mockKeysSession{
+				validateFn: func(ctx context.Context, token string, ipAddr string) (*entity.Session, error) {
+					return nil, errors.New("bad")
+				},
+			},
+		}
+		c := newUsageCtx("/keys/usage")
+		c.Request.Header.Set("X-Session-Token", "bad")
+		h.GetApiKeysUsage(ctx, c)
+		if c.Response.StatusCode() != 401 {
+			t.Fatalf("status = %d, want 401", c.Response.StatusCode())
+		}
+	})
+
+	t.Run("success_200", func(t *testing.T) {
+		var gotDev uuid.UUID
+		h := &KeysManagementHandler{
+			ss: &mockKeysSession{
+				validateFn: func(ctx context.Context, token string, ipAddr string) (*entity.Session, error) {
+					return &entity.Session{DeveloperID: devID}, nil
+				},
+			},
+			ks: &mockKeysAPI{
+				getUsageFn: func(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyUsageStats, error) {
+					gotDev = developerID
+					return []dtos.ApiKeyUsageStats{{
+						ApiKeyID:   uuid.New(),
+						Name:       "k",
+						CreatedAt:  time.Now(),
+						TotalUsage: 1,
+						UsageByDay: []dtos.ApiKeyUsageDaily{},
+					}}, nil
+				},
+			},
+		}
+		c := newUsageCtx("/keys/usage")
+		c.Request.Header.Set("X-Session-Token", "ok")
+		h.GetApiKeysUsage(ctx, c)
+		if c.Response.StatusCode() != 200 {
+			t.Fatalf("status = %d, want 200", c.Response.StatusCode())
+		}
+		if gotDev != devID {
+			t.Fatalf("developerID = %v, want %v", gotDev, devID)
 		}
 	})
 }

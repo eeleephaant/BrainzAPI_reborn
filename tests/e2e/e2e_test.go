@@ -28,7 +28,7 @@ func urlQueryEscape(s string) string {
 const (
 	authBaseURL         = "http://127.0.0.1:8081"
 	developersBaseURL   = "http://127.0.0.1:3333"
-	schedulesBaseURL    = "http://127.0.0.1:8080"
+	schedulesBaseURL    = "http://127.0.0.1:18080"
 	composeProject      = "brainz-e2e"
 	stackStartupTimeout = 6 * time.Minute
 	serviceReadyTimeout = 2 * time.Minute
@@ -78,6 +78,24 @@ type authResult struct {
 	ErrorMessage string `json:"error_message"`
 }
 
+type apiKeyUsageDaily struct {
+	Date  string `json:"date"`
+	Count uint32 `json:"count"`
+}
+
+type apiKeyUsageEntry struct {
+	ApiKeyID   string             `json:"api_key_id"`
+	Name       string             `json:"name"`
+	CreatedAt  string             `json:"created_at"`
+	LastUsedAt *string            `json:"last_used_at"`
+	TotalUsage uint64             `json:"total_usage"`
+	UsageByDay []apiKeyUsageDaily `json:"usage_by_day"`
+}
+
+type apiKeysUsageResponse struct {
+	Keys []apiKeyUsageEntry `json:"keys"`
+}
+
 func TestMain(m *testing.M) {
 	root, err := findRepoRoot()
 	if err != nil {
@@ -85,6 +103,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	repoRoot = root
+
+	// Host port for schedules (avoid clashing with another stack on :8080). Must match schedulesBaseURL.
+	_ = os.Setenv("SCHEDULES_PORT", "18080")
 
 	_, _ = runCompose(2*time.Minute, "down", "-v", "--remove-orphans")
 
@@ -194,12 +215,14 @@ func TestDuplicateRegistrationRejected(t *testing.T) {
 	}
 }
 
-func TestCreateKeyRejectsOtherDeveloperUUID(t *testing.T) {
+func TestCreateKeyPortalIgnoresForeignDevUUIDUsesSession(t *testing.T) {
 	password := "SuperSecretPass123!"
 
 	_, sessionToken, _ := registerConfirmAndLogin(t, "owner", password)
 	_, _, otherDeveloperID := registerConfirmAndLogin(t, "other", password)
 
+	// BrainzDevelopers binds ApiKeyCreateSessionRequest only; dev_uuid/permissions in body are ignored.
+	// The key is always created for the session developer.
 	body := map[string]any{
 		"api_key_name": "foreign-key",
 		"dev_uuid":     otherDeveloperID,
@@ -210,13 +233,26 @@ func TestCreateKeyRejectsOtherDeveloperUUID(t *testing.T) {
 		"X-Session-Token": sessionToken,
 	}
 
-	var resp map[string]string
+	var resp apiKeyCreateResponse
 	status := doJSON(t, http.MethodPost, developersBaseURL+"/key", body, headers, &resp)
-	if status != http.StatusForbidden {
-		t.Fatalf("create key for another developer status = %d, want %d", status, http.StatusForbidden)
+	if status != http.StatusCreated {
+		t.Fatalf("create key status = %d, want %d", status, http.StatusCreated)
 	}
-	if resp["error"] != "you cannot create keys for other developers" {
-		t.Fatalf("create key for another developer error = %q, want %q", resp["error"], "you cannot create keys for other developers")
+	if resp.APIKey == "" {
+		t.Fatal("expected api key in response")
+	}
+	// Confirm key is under owner, not otherDeveloperID (would appear in owner's list only).
+	var keysResp struct {
+		Keys []struct {
+			ID string `json:"id"`
+		} `json:"keys"`
+	}
+	st := doJSON(t, http.MethodGet, developersBaseURL+"/keys", nil, headers, &keysResp)
+	if st != http.StatusOK {
+		t.Fatalf("list keys status = %d", st)
+	}
+	if len(keysResp.Keys) != 1 {
+		t.Fatalf("owner keys len = %d, want 1", len(keysResp.Keys))
 	}
 }
 
@@ -302,6 +338,128 @@ func TestDevelopersGetKeysWithoutSessionReturns400(t *testing.T) {
 	status := doJSON(t, http.MethodGet, developersBaseURL+"/keys", nil, nil, nil)
 	if status != http.StatusBadRequest {
 		t.Fatalf("get keys without session status = %d, want %d", status, http.StatusBadRequest)
+	}
+}
+
+func TestDevelopersGetKeysUsageWithoutSessionReturns401(t *testing.T) {
+	status := doJSON(t, http.MethodGet, developersBaseURL+"/keys/usage", nil, nil, nil)
+	if status != http.StatusUnauthorized {
+		t.Fatalf("get keys usage without session status = %d, want %d", status, http.StatusUnauthorized)
+	}
+}
+
+func TestDevelopersKeysUsageRejectsDeveloperIDQueryParam(t *testing.T) {
+	password := "SuperSecretPass123!"
+	_, sessionToken, otherID := registerConfirmAndLogin(t, "usage_qs", password)
+
+	u := developersBaseURL + "/keys/usage?developer_id=" + urlQueryEscape(otherID)
+	var resp map[string]string
+	status := doJSON(t, http.MethodGet, u, nil, map[string]string{"X-Session-Token": sessionToken}, &resp)
+	if status != http.StatusBadRequest {
+		t.Fatalf("keys usage with developer_id query status = %d, want %d", status, http.StatusBadRequest)
+	}
+	if resp["error"] == "" {
+		t.Fatalf("expected error body, got %+v", resp)
+	}
+}
+
+func TestDevelopersKeyUsageStatsNoKeys(t *testing.T) {
+	password := "SuperSecretPass123!"
+	email := uniqueEmail("usage_no_keys")
+	registerUser(t, email, password)
+	sessionToken := loginUser(t, email, password)
+
+	var out apiKeysUsageResponse
+	status := doJSON(t, http.MethodGet, developersBaseURL+"/keys/usage", nil, map[string]string{
+		"X-Session-Token": sessionToken,
+	}, &out)
+	if status != http.StatusOK {
+		t.Fatalf("keys usage status = %d, want %d", status, http.StatusOK)
+	}
+	if len(out.Keys) != 0 {
+		t.Fatalf("keys usage with no api keys: len(keys) = %d, want 0", len(out.Keys))
+	}
+}
+
+func TestDevelopersKeyUsageStatsEmptyUsageRows(t *testing.T) {
+	password := "SuperSecretPass123!"
+	_, sessionToken, developerID := registerConfirmAndLogin(t, "usage_empty", password)
+	_ = createAPIKey(t, sessionToken, developerID, []map[string]any{{"Action": "read"}})
+
+	var out apiKeysUsageResponse
+	status := doJSON(t, http.MethodGet, developersBaseURL+"/keys/usage", nil, map[string]string{
+		"X-Session-Token": sessionToken,
+	}, &out)
+	if status != http.StatusOK {
+		t.Fatalf("keys usage status = %d, want %d", status, http.StatusOK)
+	}
+	if len(out.Keys) != 1 {
+		t.Fatalf("len(keys) = %d, want 1", len(out.Keys))
+	}
+	k := out.Keys[0]
+	if k.TotalUsage != 0 {
+		t.Fatalf("total_usage = %d, want 0", k.TotalUsage)
+	}
+	if len(k.UsageByDay) != 0 {
+		t.Fatalf("len(usage_by_day) = %d, want 0", len(k.UsageByDay))
+	}
+	if k.LastUsedAt != nil {
+		t.Fatalf("last_used_at = %q, want omitted when no usage rows", *k.LastUsedAt)
+	}
+}
+
+func TestDevelopersKeyUsageStatsWithMockedUsageRows(t *testing.T) {
+	password := "SuperSecretPass123!"
+	_, sessionToken, developerID := registerConfirmAndLogin(t, "usage_mock", password)
+	_ = createAPIKey(t, sessionToken, developerID, []map[string]any{{"Action": "read"}})
+
+	apiKeyID := fetchApiKeyID(t, developerID)
+	if apiKeyID == "" {
+		t.Fatal("fetchApiKeyID returned empty")
+	}
+
+	// Two events on the same UTC day, one on another day (within 90d window).
+	insertMockAPIKeyUsage(t, apiKeyID)
+
+	var out apiKeysUsageResponse
+	status := doJSON(t, http.MethodGet, developersBaseURL+"/keys/usage", nil, map[string]string{
+		"X-Session-Token": sessionToken,
+	}, &out)
+	if status != http.StatusOK {
+		t.Fatalf("keys usage status = %d, want %d", status, http.StatusOK)
+	}
+	if len(out.Keys) != 1 {
+		t.Fatalf("len(keys) = %d, want 1", len(out.Keys))
+	}
+	k := out.Keys[0]
+	if k.ApiKeyID != apiKeyID {
+		t.Fatalf("api_key_id = %q, want %q", k.ApiKeyID, apiKeyID)
+	}
+	if k.TotalUsage != 3 {
+		t.Fatalf("total_usage = %d, want 3", k.TotalUsage)
+	}
+	if k.LastUsedAt == nil || *k.LastUsedAt == "" {
+		t.Fatal("expected last_used_at after mocked usage")
+	}
+	if len(k.UsageByDay) != 2 {
+		t.Fatalf("len(usage_by_day) = %d, want 2 (two distinct UTC days)", len(k.UsageByDay))
+	}
+	var daySum uint32
+	for _, d := range k.UsageByDay {
+		daySum += d.Count
+	}
+	if daySum != 3 {
+		t.Fatalf("sum(usage_by_day.count) = %d, want 3", daySum)
+	}
+
+	// BrainzAuth direct endpoint should match (same aggregates).
+	var authOut apiKeysUsageResponse
+	authStatus := doJSON(t, http.MethodGet, authBaseURL+"/keys/usage?developer_id="+urlQueryEscape(developerID), nil, nil, &authOut)
+	if authStatus != http.StatusOK {
+		t.Fatalf("auth /keys/usage status = %d, want %d", authStatus, http.StatusOK)
+	}
+	if len(authOut.Keys) != 1 || authOut.Keys[0].TotalUsage != 3 {
+		t.Fatalf("auth usage mismatch: %+v", authOut.Keys)
 	}
 }
 
@@ -499,7 +657,7 @@ func TestSchedulesGetLessonsWithoutKeyReturns403(t *testing.T) {
 }
 
 func TestSchedulesInfoStreamWebSocketUpgrade(t *testing.T) {
-	u := "ws://127.0.0.1:8080/info-stream?institution_id=1"
+	u := strings.Replace(schedulesBaseURL, "http://", "ws://", 1) + "/info-stream?institution_id=1"
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 5 * time.Second,
@@ -639,6 +797,32 @@ func fetchDeveloperID(t *testing.T, email string) string {
 		email,
 	)
 	return strings.TrimSpace(execPSQLQuery(t, "brainz_developers", query))
+}
+
+func fetchApiKeyID(t *testing.T, developerID string) string {
+	t.Helper()
+	query := fmt.Sprintf(
+		"SELECT id FROM api_key WHERE developer_id = '%s' ORDER BY created_at DESC LIMIT 1;",
+		developerID,
+	)
+	return strings.TrimSpace(execPSQLQuery(t, "brainz_auth", query))
+}
+
+// insertMockAPIKeyUsage inserts three rows: two share the same UTC calendar day (both NOW()-1d), one older day.
+func insertMockAPIKeyUsage(t *testing.T, apiKeyID string) {
+	t.Helper()
+	// Single line: leading newline breaks `psql -c` when passed through `sh -lc`.
+	query := fmt.Sprintf(
+		"INSERT INTO api_key_usage (id, api_key_id, endpoint, method, usage_at, response_code) VALUES "+
+			"(uuid_generate_v4(), '%s'::uuid, '/e2e-a', 'GET', NOW() - interval '1 day', '200'), "+
+			"(uuid_generate_v4(), '%s'::uuid, '/e2e-b', 'GET', NOW() - interval '1 day', '200'), "+
+			"(uuid_generate_v4(), '%s'::uuid, '/e2e-c', 'GET', NOW() - interval '4 days', '200');",
+		apiKeyID, apiKeyID, apiKeyID,
+	)
+	out := execPSQLQuery(t, "brainz_auth", query)
+	if !strings.Contains(out, "INSERT 0 3") {
+		t.Fatalf("insert api_key_usage: output = %q, want INSERT 0 3", strings.TrimSpace(out))
+	}
 }
 
 func setDeveloperRole(t *testing.T, email string, roleID int) {

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ type KeysUserService interface {
 // keysApiKeysService is the subset of ApiKeysService used by KeysManagementHandler (for testing).
 type keysApiKeysService interface {
 	GetApiKeys(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyShareModel, error)
+	GetApiKeysUsage(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyUsageStats, error)
 	CreateApiKey(ctx context.Context, issuer uuid.UUID, developerID uuid.UUID, name string, perms []permissions.Permission, ipWhitelist []string) (*dtos.ApiKeyCreateResponse, error)
 	RemoveApiKey(ctx context.Context, apiKey string, devID string) error
 }
@@ -34,10 +36,11 @@ type KeysManagementHandler struct {
 	ks keysApiKeysService
 	ss keysSessionValidator
 	us KeysUserService
+	sc SessionHTTPConfig
 }
 
-func NewKeysManagementHandler(ks *services.ApiKeysService, ss *services.SessionService, us KeysUserService) *KeysManagementHandler {
-	return &KeysManagementHandler{ks: ks, ss: ss, us: us}
+func NewKeysManagementHandler(ks *services.ApiKeysService, ss *services.SessionService, us KeysUserService, sc SessionHTTPConfig) *KeysManagementHandler {
+	return &KeysManagementHandler{ks: ks, ss: ss, us: us, sc: sc}
 }
 
 var (
@@ -61,7 +64,7 @@ const (
 )
 
 func (k *KeysManagementHandler) GetApiKeys(ctx context.Context, c *app.RequestContext) {
-	sessionToken := c.Request.Header.Get("X-Session-Token")
+	sessionToken := k.sc.TokenFromRequest(c)
 	session, err := k.ss.ValidateToken(ctx, sessionToken, c.ClientIP())
 	if err != nil || session == nil {
 		c.JSON(400, map[string]string{"error": "invalid session token"})
@@ -80,8 +83,43 @@ func (k *KeysManagementHandler) GetApiKeys(ctx context.Context, c *app.RequestCo
 	c.JSON(200, map[string][]dtos.ApiKeyShareModel{"keys": keys})
 }
 
+func (k *KeysManagementHandler) GetApiKeysUsage(ctx context.Context, c *app.RequestContext) {
+	// Stats are scoped strictly to the session user; never accept developer_id from the client.
+	if strings.TrimSpace(c.Query("developer_id")) != "" {
+		c.JSON(400, map[string]string{"error": "developer_id query parameter is not allowed; session cookie or X-Session-Token only"})
+		return
+	}
+
+	sessionToken := strings.TrimSpace(k.sc.TokenFromRequest(c))
+	if sessionToken == "" {
+		c.JSON(401, map[string]string{"error": "missing session token"})
+		return
+	}
+
+	session, err := k.ss.ValidateToken(ctx, sessionToken, c.ClientIP())
+	if err != nil || session == nil {
+		c.JSON(401, map[string]string{"error": "invalid session token"})
+		// Log invalid attempts at debug level; avoid leaking details to client.
+		if err != nil {
+			zap.L().Debug("session validation failed", zap.Error(err))
+		}
+		return
+	}
+
+	stats, err := k.ks.GetApiKeysUsage(ctx, session.DeveloperID)
+	if err != nil {
+		c.JSON(500, map[string]string{"error": "internal server error"})
+		zap.L().Error("GetApiKeysUsage", zap.Error(err))
+		return
+	}
+	if stats == nil {
+		stats = []dtos.ApiKeyUsageStats{}
+	}
+	c.JSON(200, dtos.ApiKeysUsageResponse{Keys: stats})
+}
+
 func (k *KeysManagementHandler) CreateApiKey(ctx context.Context, c *app.RequestContext) {
-	sessionToken := c.Request.Header.Get("X-Session-Token")
+	sessionToken := k.sc.TokenFromRequest(c)
 	session, err := k.ss.ValidateToken(ctx, sessionToken, c.ClientIP())
 	if err != nil || session == nil {
 		c.JSON(400, map[string]string{"error": "invalid session token"})
@@ -141,7 +179,7 @@ func permissionsForRole(roleID uint) ([]permissions.Permission, error) {
 }
 
 func (k *KeysManagementHandler) DeleteApiKey(ctx context.Context, c *app.RequestContext) {
-	sessionToken := c.Request.Header.Get("X-Session-Token")
+	sessionToken := k.sc.TokenFromRequest(c)
 	apiKeyStr := c.Query("api_key")
 	session, err := k.ss.ValidateToken(ctx, sessionToken, c.ClientIP())
 	if err != nil || session == nil {

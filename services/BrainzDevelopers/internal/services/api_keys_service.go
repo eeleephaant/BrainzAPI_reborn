@@ -126,6 +126,48 @@ func (aks *ApiKeysService) GetApiKeys(ctx context.Context, developerID uuid.UUID
 	return wrapper.ApiKeys, nil
 }
 
+func (aks *ApiKeysService) GetApiKeysUsage(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyUsageStats, error) {
+	base, err := url.Parse(aks.authURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid auth URL: %w", err)
+	}
+	base.Path = "/keys/usage"
+	base.RawQuery = url.Values{"developer_id": {developerID.String()}}.Encode()
+	fullURL := base.String()
+
+	req := protocol.AcquireRequest()
+	defer protocol.ReleaseRequest(req)
+
+	req.SetMethod(http.MethodGet)
+	req.SetRequestURI(fullURL)
+	if aks.authHeader != "" {
+		req.Header.Set("Authorization", aks.authHeader)
+	}
+	resp := protocol.AcquireResponse()
+	defer protocol.ReleaseResponse(resp)
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	err = aks.hc.Do(ctx, req, resp)
+	if err != nil {
+		zap.L().Error("HTTP request failed", zap.Error(err))
+		return nil, fmt.Errorf("request to auth service: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		zap.L().Error("Auth service returned error", zap.Int("status_code", resp.StatusCode()), zap.String("body", string(resp.Body())))
+		return nil, fmt.Errorf("auth service error: %s", string(resp.Body()))
+	}
+
+	var wrapper dtos.ApiKeysUsageResponse
+	if err := json.Unmarshal(resp.Body(), &wrapper); err != nil {
+		zap.L().Error("Failed to unmarshal usage response", zap.Error(err))
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return wrapper.Keys, nil
+}
+
 func (aks *ApiKeysService) RemoveApiKey(ctx context.Context, apiKey string, devID string) error {
 	req := protocol.AcquireRequest()
 	defer protocol.ReleaseRequest(req)

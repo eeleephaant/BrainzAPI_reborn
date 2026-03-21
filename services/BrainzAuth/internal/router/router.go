@@ -15,6 +15,7 @@ func Register(h *server.Hertz, ah *handlers.AuthHandler, akmh *handlers.ApiKeysM
 	h.POST("/auth", ah.Auth)
 	h.POST("/key", akmh.CreateApiKey)
 	h.DELETE("/key", akmh.RemoveApiKey)
+	h.GET("/keys/usage", akmh.GetDeveloperKeysUsage)
 	h.GET("/keys", akmh.GetDeveloperApiKeys)
 
 	h.NoRoute(func(ctx context.Context, c *app.RequestContext) {

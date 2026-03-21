@@ -12,11 +12,12 @@ import (
 )
 
 type ApiKeysManagementHandler struct {
-	aks *services.ApiKeysService
+	aks  *services.ApiKeysService
+	akus *services.ApiKeyUsageService
 }
 
-func NewApiKeysManagementHandler(aks *services.ApiKeysService) *ApiKeysManagementHandler {
-	return &ApiKeysManagementHandler{aks: aks}
+func NewApiKeysManagementHandler(aks *services.ApiKeysService, akus *services.ApiKeyUsageService) *ApiKeysManagementHandler {
+	return &ApiKeysManagementHandler{aks: aks, akus: akus}
 }
 
 func (akmh *ApiKeysManagementHandler) RemoveApiKey(ctx context.Context, c *app.RequestContext) {
@@ -107,4 +108,24 @@ func (akmh *ApiKeysManagementHandler) GetDeveloperApiKeys(ctx context.Context, c
 		ApiKeys: keysResp,
 	})
 	zap.L().Info("Api keys retrieved successfully")
+}
+
+func (akmh *ApiKeysManagementHandler) GetDeveloperKeysUsage(ctx context.Context, c *app.RequestContext) {
+	devIdStr := c.Query("developer_id")
+	devId, err := uuid.Parse(devIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, map[string]string{"message": "missing or invalid query param developer_id"})
+		zap.L().Error("Invalid developer_id query param", zap.Error(err))
+		return
+	}
+
+	stats, err := akmh.akus.GetUsageStatsForDeveloper(ctx, devId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, map[string]string{"message": "failed to get usage stats: " + err.Error()})
+		zap.L().Error("Failed to get usage stats", zap.Error(err))
+		return
+	}
+
+	c.JSON(http.StatusOK, dtos.ApiKeysUsageResponse{Keys: stats})
+	zap.L().Info("Api key usage stats retrieved successfully")
 }

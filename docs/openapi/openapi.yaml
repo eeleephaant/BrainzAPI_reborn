@@ -6,9 +6,11 @@ info:
     Combined OpenAPI spec for BrainzAPI microservices.
     Note: services run on different hosts/ports; each operation has its own `servers`.
 
-    **BrainzDevelopers** (port 3333 in local compose): CORS is enabled for browser apps — `Access-Control-Allow-Origin: *`,
-    `Access-Control-Allow-Headers: *`, `Access-Control-Expose-Headers: *`, and usual methods on OPTIONS preflight.
-    Use `X-Session-Token` for session-scoped routes (`/key`, `/keys` on that host).
+    **BrainzDevelopers** (port 3333 in local compose): CORS uses `Access-Control-Allow-Credentials: true` and echoes the
+    request `Origin` when allowed (not `*`, so `fetch` with `credentials: 'include'` works). Set env `CORS_ALLOWED_ORIGINS`
+    to a comma-separated allowlist (e.g. `https://pentapulse.ru`). If unset, any non-empty Origin is accepted (dev only).
+    `Access-Control-Allow-Headers: *`, `Access-Control-Expose-Headers: *`, usual methods on preflight.
+    After `POST /login`, the session is also stored in an HttpOnly cookie (default `brainz_session`). Session-scoped routes accept either that cookie or header `X-Session-Token`.
 
 tags:
   - name: auth
@@ -16,7 +18,7 @@ tags:
   - name: developers
     description: |
       Developer registration, login, and session-based API key helpers (default local base `http://127.0.0.1:3333`).
-      Session routes require header `X-Session-Token` (`SessionTokenHeader`). CORS allows arbitrary request headers from the browser; see top-level `info.description`.
+      Session routes: HttpOnly session cookie or `X-Session-Token` (`SessionTokenHeader`). CORS: see top-level `info.description`.
   - name: schedules
     description: BrainzSchedules service
   - name: parser
@@ -32,6 +34,7 @@ components:
       type: apiKey
       in: header
       name: X-Session-Token
+      description: Session from `POST /login` JSON `token`; same value may be sent as HttpOnly cookie `brainz_session` (see `SESSION_COOKIE_NAME`).
   schemas:
     Error:
       type: object
@@ -80,6 +83,9 @@ components:
         - $ref: "#/components/schemas/RegisterDto"
     LoginResponse:
       type: object
+      description: |
+        JSON `token` duplicates the session value also sent as **HttpOnly** cookie `brainz_session` (name overridable via `SESSION_COOKIE_NAME`).
+        Browsers with `credentials: 'include'` receive the cookie automatically; other clients can use the header `X-Session-Token`.
       properties:
         token:
           type: string
@@ -90,6 +96,34 @@ components:
         message:
           type: string
       required: [message]
+
+    DeveloperProfile:
+      type: object
+      description: Current developer (BrainzDevelopers GET /profile). Passwords and 2FA secrets are never returned.
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        email_confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        role_id:
+          type: integer
+          minimum: 0
+        banned_at:
+          type: string
+          format: date-time
+          nullable: true
+        two_factor_enabled:
+          type: boolean
+      required: [id, email, created_at, role_id, two_factor_enabled]
 
     ApiKeyCreateDto:
       type: object
@@ -171,6 +205,55 @@ components:
           format: date-time
           nullable: true
       required: [id, title, suffix, prefix, expires_at]
+
+    ApiKeyUsageDaily:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date-time
+          description: Start of UTC calendar day for aggregation.
+        count:
+          type: integer
+          minimum: 0
+      required: [date, count]
+
+    ApiKeyUsageStats:
+      type: object
+      description: |
+        Per-key usage. `usage_by_day` covers roughly the last 90 days (UTC; exact window is server-defined).
+        `total_usage` reflects all successful auth checks recorded in `api_key_usage` (lifetime).
+      properties:
+        api_key_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        total_usage:
+          type: integer
+          format: int64
+          minimum: 0
+        usage_by_day:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKeyUsageDaily"
+      required: [api_key_id, name, created_at, total_usage, usage_by_day]
+
+    ApiKeysUsageResponse:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKeyUsageStats"
+      required: [keys]
 
     Institution:
       type: object
@@ -384,6 +467,66 @@ paths:
               schema:
                 type: string
 
+  /keys/usage:
+    get:
+      tags: [auth, developers]
+      servers:
+        - url: http://127.0.0.1:8081
+          description: BrainzAuth — requires query `developer_id`
+        - url: http://127.0.0.1:3333
+          description: BrainzDevelopers — `X-Session-Token` only; do not send `developer_id` (rejected with 400)
+      summary: API key usage statistics
+      description: |
+        Aggregates rows from `api_key_usage` (recorded on successful `/auth` when the gateway sends `X-Original-Path` / `X-Original-Method`).
+        **BrainzAuth:** pass `developer_id`. **BrainzDevelopers:** session only — stats are always for the logged-in developer; `developer_id` in the query string is not allowed.
+      parameters:
+        - in: query
+          name: developer_id
+          required: false
+          description: BrainzAuth only. Must be omitted on BrainzDevelopers (otherwise 400).
+          schema:
+            type: string
+            format: uuid
+      security:
+        - ApiKeyHeader: []
+        - SessionTokenHeader: []
+      responses:
+        "200":
+          description: Per-key usage stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeysUsageResponse"
+        "400":
+          description: |
+            Bad request — e.g. BrainzDevelopers sent `developer_id` query (not allowed), or invalid body on other operations.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        "401":
+          description: |
+            Unauthorized — BrainzDevelopers: missing or invalid `X-Session-Token` for this route.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
   /keys:
     get:
       tags: [auth, developers]
@@ -462,6 +605,9 @@ paths:
       servers:
         - url: http://127.0.0.1:3333
       summary: Login and get session token
+      description: |
+        On success, response includes `Set-Cookie` with the session token (HttpOnly, SameSite configurable).
+        Subsequent requests may send the token via cookie or `X-Session-Token`.
       requestBody:
         required: true
         content:
@@ -470,7 +616,11 @@ paths:
               $ref: "#/components/schemas/LoginDto"
       responses:
         "200":
-          description: OK
+          description: OK — JSON body plus Set-Cookie session cookie
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -490,6 +640,41 @@ paths:
             application/json:
               schema:
                 type: object
+
+  /profile:
+    get:
+      tags: [developers]
+      servers:
+        - url: http://127.0.0.1:3333
+      summary: Current developer profile
+      description: Requires `X-Session-Token`. Response omits password hash, salt, and 2FA secret; `two_factor_enabled` indicates whether 2FA is configured.
+      security:
+        - SessionTokenHeader: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeveloperProfile"
+        "400":
+          description: Missing or invalid session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        "500":
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
 
   /institution:
     get:

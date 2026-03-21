@@ -52,7 +52,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	akus := services.NewApiKeysUsageService(akur, akr)
 
 	ah := handlers.NewAuthHandler(aks, akus, rls)
-	akmh := handlers.NewApiKeysManagementHandler(aks)
+	akmh := handlers.NewApiKeysManagementHandler(aks, akus)
 
 	router.Register(h, ah, akmh)
 

@@ -4,6 +4,7 @@ import (
 	"brainz/auth/internal/models"
 	"brainz/auth/internal/repositories"
 	"brainz/auth/internal/utils"
+	"brainz/common/dtos"
 	"context"
 	"time"
 
@@ -40,4 +41,12 @@ func (akus *ApiKeyUsageService) RecordUsage(ctx context.Context, APIKey string, 
 	}
 
 	return createdApiKeyUsage, nil
+}
+
+const usageStatsHistoryDays = 90
+
+// GetUsageStatsForDeveloper returns per-key totals and daily counts (UTC) for the last usageStatsHistoryDays days.
+func (akus *ApiKeyUsageService) GetUsageStatsForDeveloper(ctx context.Context, developerID uuid.UUID) ([]dtos.ApiKeyUsageStats, error) {
+	since := time.Now().UTC().AddDate(0, 0, -usageStatsHistoryDays)
+	return akus.akur.UsageStatsForDeveloper(ctx, developerID, since)
 }
