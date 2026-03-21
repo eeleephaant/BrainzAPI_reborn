@@ -13,4 +13,5 @@ type ApiKeyShareModel struct {
 	Prefix    string     `json:"prefix"`
 	ExpiresAt time.Time  `json:"expires_at"`
 	RevokedAt *time.Time `json:"revoked_at"`
+	CreatedAt time.Time  `json:"created_at"`
 }

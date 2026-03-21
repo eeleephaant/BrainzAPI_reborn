@@ -99,6 +99,7 @@ func (akmh *ApiKeysManagementHandler) GetDeveloperApiKeys(ctx context.Context, c
 			RevokedAt: k.RevokedAt,
 			Suffix:    k.SuffixRaw,
 			Prefix:    k.PrefixRaw,
+			CreatedAt: k.CreatedAt,
 		})
 	}
 
