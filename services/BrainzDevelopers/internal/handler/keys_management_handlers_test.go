@@ -133,6 +133,15 @@ func TestKeysManagementHandler_GetApiKeys(t *testing.T) {
 		if c.Response.StatusCode() != 200 {
 			t.Fatalf("status = %d, want 200", c.Response.StatusCode())
 		}
+		var out struct {
+			Keys []dtos.ApiKeyShareModel `json:"keys"`
+		}
+		if err := json.Unmarshal(c.Response.Body(), &out); err != nil {
+			t.Fatalf("unmarshal body: %v", err)
+		}
+		if len(out.Keys) != 1 {
+			t.Fatalf("len(keys) = %d, want 1", len(out.Keys))
+		}
 	})
 }
 

@@ -74,7 +74,10 @@ func (k *KeysManagementHandler) GetApiKeys(ctx context.Context, c *app.RequestCo
 		zap.L().Error("Internal server error", zap.Error(err))
 		return
 	}
-	c.JSON(200, keys)
+	if keys == nil {
+		keys = []dtos.ApiKeyShareModel{}
+	}
+	c.JSON(200, map[string][]dtos.ApiKeyShareModel{"keys": keys})
 }
 
 func (k *KeysManagementHandler) CreateApiKey(ctx context.Context, c *app.RequestContext) {
