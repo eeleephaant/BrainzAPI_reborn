@@ -9,7 +9,8 @@ info:
     **BrainzDevelopers** (port 3333 in local compose): CORS uses `Access-Control-Allow-Credentials: true` and echoes the
     request `Origin` when allowed (not `*`, so `fetch` with `credentials: 'include'` works). Set env `CORS_ALLOWED_ORIGINS`
     to a comma-separated allowlist (e.g. `https://pentapulse.ru`). If unset, any non-empty Origin is accepted (dev only).
-    `Access-Control-Allow-Headers: *`, `Access-Control-Expose-Headers: *`, usual methods on preflight.
+    Allow-Headers and Expose-Headers are **explicit lists** (not `*`) so credentialed `fetch` works, including `Content-Type` for JSON.
+    Optional extra allowlist: env `CORS_EXTRA_ALLOW_HEADERS` (comma-separated). Usual methods on preflight.
     After `POST /login`, the session is also stored in an HttpOnly cookie (default `brainz_session`). Session-scoped routes accept either that cookie or header `X-Session-Token`.
 
 tags:

@@ -55,12 +55,12 @@ func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 		switch {
 		case errors.Is(err, entity.ErrWrongCredentials):
 			c.JSON(401, map[string]string{"error": "wrong credentials"})
-		case errors.Is(err, entity.ErrEmailNotConfirmed):
-			c.JSON(401, map[string]string{"error": "email not confirmed"})
 		case errors.Is(err, entity.ErrUserBanned):
 			c.JSON(403, map[string]string{"error": "user banned"})
 		case errors.Is(err, entity.ErrNeed2FA):
 			c.JSON(401, map[string]string{"error": "2FA required"})
+		case errors.Is(err, entity.ErrEmailNotConfirmed):
+			c.JSON(401, map[string]string{"error": "email not confirmed"})
 		default:
 			c.JSON(500, map[string]string{"error": "internal server error"})
 			zap.L().Error(op,

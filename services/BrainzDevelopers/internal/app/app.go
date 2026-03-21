@@ -43,12 +43,46 @@ func parseCookieSameSite(s string) protocol.CookieSameSite {
 	}
 }
 
+// corsAllowHeaders lists headers browsers may send on credentialed requests.
+// Wildcard "*" is not reliably accepted for Allow-Headers when Allow-Credentials is true — include Content-Type explicitly.
+func corsAllowHeaders(extra string) []string {
+	base := []string{
+		"Origin",
+		"Content-Type",
+		"Accept",
+		"Accept-Language",
+		"Content-Length",
+		"Authorization",
+		"X-Session-Token",
+		"X-Requested-With",
+	}
+	seen := make(map[string]struct{}, len(base)+8)
+	for _, s := range base {
+		seen[strings.ToLower(s)] = struct{}{}
+	}
+	out := append([]string(nil), base...)
+	for _, p := range strings.Split(extra, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		k := strings.ToLower(p)
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
+
 func corsFromConfig(cfg *config.Config) *cors.Config {
 	corsCfg := cors.DefaultConfig()
 	corsCfg.AllowAllOrigins = false
 	corsCfg.AllowCredentials = true
-	corsCfg.AllowHeaders = []string{"*"}
-	corsCfg.ExposeHeaders = []string{"*"}
+	corsCfg.AllowHeaders = corsAllowHeaders(cfg.CorsExtraAllowHeaders)
+	// Expose-Headers: avoid "*" with credentials; list what browser scripts may read on responses.
+	corsCfg.ExposeHeaders = []string{"Content-Type", "Content-Length"}
 
 	allowed := cfg.CorsOriginSet()
 	if len(allowed) == 0 {

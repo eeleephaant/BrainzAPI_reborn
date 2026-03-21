@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"net/url"
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -81,10 +82,17 @@ func (s SessionHTTPConfig) TokenFromRequest(c *app.RequestContext) string {
 	if len(b) == 0 {
 		return ""
 	}
-	return strings.TrimSpace(string(b))
+	raw := strings.TrimSpace(string(b))
+	// Hertz SetCookie applies url.QueryEscape to the value, so ":" becomes "%3A"; mirror that on read.
+	dec, err := url.QueryUnescape(raw)
+	if err != nil {
+		return raw
+	}
+	return dec
 }
 
-// SetSessionCookie sets HttpOnly cookie with the opaque session token (same value as JSON login response).
+// SetSessionCookie sets HttpOnly cookie with the opaque session token (same logical value as JSON login response).
+// Note: Hertz encodes the value with QueryEscape in SetCookie; TokenFromRequest decodes when reading the cookie.
 func (s SessionHTTPConfig) SetSessionCookie(c *app.RequestContext, token string) {
 	c.SetCookie(s.cookieName(), token, s.maxAgeOrDefault(), s.pathOrDefault(), s.CookieDomain, s.sameSiteOrDefault(), s.Secure, true)
 }

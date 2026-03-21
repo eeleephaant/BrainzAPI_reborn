@@ -16,6 +16,8 @@ type (
 		// Required for browser requests with credentials: the server must echo a concrete Origin, not "*".
 		// If empty, any non-empty Origin is allowed (development only).
 		CorsAllowedOrigins string `env:"CORS_ALLOWED_ORIGINS"`
+		// Comma-separated extra Access-Control-Allow-Headers (merged with built-in list). Use when the SPA sends custom headers.
+		CorsExtraAllowHeaders string `env:"CORS_EXTRA_ALLOW_HEADERS"`
 		// Session cookie (set on login; clients may also send X-Session-Token).
 		SessionCookieName     string `env:"SESSION_COOKIE_NAME"`      // default brainz_session
 		SessionCookieDomain   string `env:"SESSION_COOKIE_DOMAIN"`    // e.g. .example.com
