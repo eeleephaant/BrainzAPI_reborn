@@ -87,6 +87,7 @@ components:
 
     ApiKeyCreateDto:
       type: object
+      description: Body for **BrainzAuth** `POST /key` (direct). Requires `dev_uuid`.
       properties:
         api_key_name:
           type: string
@@ -102,6 +103,28 @@ components:
           items:
             type: string
       required: [api_key_name, dev_uuid]
+    ApiKeyCreateSessionRequest:
+      type: object
+      description: |
+        Body for **BrainzDevelopers** `POST /key` (port 3333). Developer is taken from `X-Session-Token`;
+        do not send `dev_uuid`.
+
+        **Permissions on the new key** are derived from the developer account `role_id` (not from this body):
+
+        | role_id | Meaning (example) | Permissions embedded in the key |
+        |--------:|-------------------|--------------------------------|
+        | 0 | Read-only developer | `read` |
+        | 1 | Read/write developer | `read`, `write` |
+
+        Other `role_id` values → `403` with `unsupported role`.
+      properties:
+        api_key_name:
+          type: string
+        ip_whitelist:
+          type: array
+          items:
+            type: string
+      required: [api_key_name]
     ApiKeyCreateResponse:
       type: object
       properties:
@@ -292,14 +315,24 @@ paths:
       tags: [auth, developers]
       servers:
         - url: http://127.0.0.1:8081
-          description: BrainzAuth
-      summary: Create API key (Auth)
+          description: BrainzAuth — body is ApiKeyCreateDto (requires dev_uuid)
+        - url: http://127.0.0.1:3333
+          description: BrainzDevelopers — body is ApiKeyCreateSessionRequest; send X-Session-Token
+      summary: Create API key
+      description: |
+        - **BrainzAuth:** use `ApiKeyCreateDto` with `dev_uuid` and permissions.
+        - **BrainzDevelopers:** use `ApiKeyCreateSessionRequest` (`api_key_name`, optional `ip_whitelist` only) and header `X-Session-Token`; developer is resolved from the session. Key permissions follow developer `role_id` (see `ApiKeyCreateSessionRequest` description).
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ApiKeyCreateDto"
+              oneOf:
+                - $ref: "#/components/schemas/ApiKeyCreateDto"
+                - $ref: "#/components/schemas/ApiKeyCreateSessionRequest"
+      security:
+        - ApiKeyHeader: []
+        - SessionTokenHeader: []
       responses:
         "200":
           description: Key created
@@ -350,15 +383,24 @@ paths:
       tags: [auth, developers]
       servers:
         - url: http://127.0.0.1:8081
-          description: BrainzAuth
-      summary: Get API keys for developer (Auth)
+          description: BrainzAuth — requires query `developer_id`
+        - url: http://127.0.0.1:3333
+          description: BrainzDevelopers — developer from `X-Session-Token` (no query)
+      summary: Get API keys for developer
+      description: |
+        - **BrainzAuth:** pass `developer_id` query parameter.
+        - **BrainzDevelopers:** send `X-Session-Token`; keys are returned for the logged-in developer.
       parameters:
         - in: query
           name: developer_id
-          required: true
+          required: false
+          description: Required for BrainzAuth; omit when using BrainzDevelopers session.
           schema:
             type: string
             format: uuid
+      security:
+        - ApiKeyHeader: []
+        - SessionTokenHeader: []
       responses:
         "200":
           description: Keys list

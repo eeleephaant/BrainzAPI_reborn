@@ -51,6 +51,8 @@ func (h *AuthHandler) Login(ctx context.Context, c *app.RequestContext) {
 		switch {
 		case errors.Is(err, entity.ErrWrongCredentials):
 			c.JSON(401, map[string]string{"error": "wrong credentials"})
+		case errors.Is(err, entity.ErrEmailNotConfirmed):
+			c.JSON(401, map[string]string{"error": "email not confirmed"})
 		case errors.Is(err, entity.ErrUserBanned):
 			c.JSON(403, map[string]string{"error": "user banned"})
 		case errors.Is(err, entity.ErrNeed2FA):
