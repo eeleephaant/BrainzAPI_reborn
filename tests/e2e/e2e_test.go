@@ -133,7 +133,8 @@ func TestMain(m *testing.M) {
 		_, _ = runCompose(2*time.Minute, "down", "-v", "--remove-orphans")
 		os.Exit(1)
 	}
-	if err := waitForTCP("127.0.0.1:8080", serviceReadyTimeout); err != nil {
+	// Must match schedulesBaseURL and SCHEDULES_PORT (root compose maps ${SCHEDULES_PORT:-8080}:8080).
+	if err := waitForTCP("127.0.0.1:18080", serviceReadyTimeout); err != nil {
 		fmt.Fprintf(os.Stderr, "schedules port not ready: %v\n", err)
 		_, _ = runCompose(2*time.Minute, "down", "-v", "--remove-orphans")
 		os.Exit(1)
@@ -485,6 +486,67 @@ func TestDevelopersDeleteKeyForOtherDeveloperReturns403(t *testing.T) {
 			"delete other developer key status=%d, want %d (attacker=%s) body=%s",
 			status, http.StatusForbidden, attackerDevID, string(body),
 		)
+	}
+}
+
+func TestDevelopersDeleteOwnKeyReturns200AndRemovesKey(t *testing.T) {
+	password := "SuperSecretPass123!"
+	_, sessionToken, developerID := registerConfirmAndLogin(t, "del_own_key", password)
+	apiKey := createAPIKey(t, sessionToken, developerID, []map[string]any{{"Action": "read"}})
+
+	var before struct {
+		Keys []struct {
+			ID string `json:"id"`
+		} `json:"keys"`
+	}
+	st := doJSON(t, http.MethodGet, developersBaseURL+"/keys", nil, map[string]string{"X-Session-Token": sessionToken}, &before)
+	if st != http.StatusOK {
+		t.Fatalf("list keys before delete status = %d, want %d", st, http.StatusOK)
+	}
+	if len(before.Keys) != 1 {
+		t.Fatalf("list keys before delete: len = %d, want 1", len(before.Keys))
+	}
+
+	var delResp map[string]string
+	delURL := developersBaseURL + "/key?api_key=" + urlQueryEscape(apiKey)
+	delSt := doJSON(t, http.MethodDelete, delURL, nil, map[string]string{"X-Session-Token": sessionToken}, &delResp)
+	if delSt != http.StatusOK {
+		t.Fatalf("delete own key status = %d, want %d", delSt, http.StatusOK)
+	}
+	if delResp["status"] != "success" {
+		t.Fatalf("delete response = %+v, want status=success", delResp)
+	}
+
+	var after struct {
+		Keys []struct {
+			ID string `json:"id"`
+		} `json:"keys"`
+	}
+	st = doJSON(t, http.MethodGet, developersBaseURL+"/keys", nil, map[string]string{"X-Session-Token": sessionToken}, &after)
+	if st != http.StatusOK {
+		t.Fatalf("list keys after delete status = %d, want %d", st, http.StatusOK)
+	}
+	if len(after.Keys) != 0 {
+		t.Fatalf("list keys after delete: len = %d, want 0", len(after.Keys))
+	}
+
+	var authResp authResult
+	authSt := doJSON(t, http.MethodGet, authBaseURL+"/auth", map[string]any{
+		"perm": map[string]any{
+			"Action":        "read",
+			"InstitutionID": 1,
+		},
+	}, map[string]string{
+		"X-API-Key":         apiKey,
+		"X-Original-IP":     "127.0.0.1",
+		"X-Original-Path":   "/e2e-after-delete",
+		"X-Original-Method": http.MethodGet,
+	}, &authResp)
+	if authSt != http.StatusUnauthorized {
+		t.Fatalf("auth with deleted key status = %d, want %d", authSt, http.StatusUnauthorized)
+	}
+	if authResp.Status {
+		t.Fatal("auth with deleted key unexpectedly succeeded")
 	}
 }
 
