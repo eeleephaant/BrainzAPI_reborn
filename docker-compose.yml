@@ -25,7 +25,7 @@ services:
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      AUTH_SERVICE_URL: http://brainz-auth:8080
+      AUTH_SERVICE_URL: http://brainz-auth:8080/auth
       APP_PORT: 8080
       APP_ADDRESS: 0.0.0.0
       APP_ENV: ${APP_ENV:-development}

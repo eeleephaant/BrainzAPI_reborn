@@ -37,7 +37,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	authServiceURL := cfg.AuthServiceURL
 	if authServiceURL == "" {
-		authServiceURL = "http://brainz-auth:8080"
+		authServiceURL = "http://brainz-auth:8080/auth"
 	}
 	authURL, err := url.Parse(authServiceURL)
 	if err != nil {

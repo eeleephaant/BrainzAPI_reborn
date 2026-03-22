@@ -36,6 +36,9 @@ func TestAuthService_Authorize(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/auth" {
+				t.Fatalf("request path = %q, want /auth (base URL without path must call /auth)", r.URL.Path)
+			}
 			body := make([]byte, r.ContentLength)
 			_, _ = r.Body.Read(body)
 			if !strings.Contains(string(body), `"perm"`) {
@@ -73,6 +76,28 @@ func TestAuthService_Authorize(t *testing.T) {
 		}
 		if ok {
 			t.Fatal("Authorize returned true, want false")
+		}
+	})
+
+	t.Run("success_explicit_auth_path", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/auth" {
+				t.Fatalf("path = %q, want /auth", r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":true,"error_message":""}`))
+		}))
+		defer srv.Close()
+
+		baseURL, _ := url.Parse(srv.URL + "/auth")
+		svc := NewAuthService(baseURL)
+
+		ok, err := svc.Authorize(context.Background(), makeReqCtx(), "test-api-key", &permissions.Permission{Action: permissions.ActionRead})
+		if err != nil {
+			t.Fatalf("Authorize error = %v", err)
+		}
+		if !ok {
+			t.Fatal("Authorize returned false, want true")
 		}
 	})
 

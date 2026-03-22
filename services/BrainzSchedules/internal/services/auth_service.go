@@ -33,6 +33,10 @@ func (ps *AuthService) Authorize(ctx context.Context, reqCtx *app.RequestContext
 	}
 
 	u := *ps.baseURL
+	// Base URL is often configured as http://brainz-auth:8080 without path; Auth expects POST /auth.
+	if u.Path == "" || u.Path == "/" {
+		u.Path = "/auth"
+	}
 	req := &protocol.Request{}
 	req.SetRequestURI(u.String())
 	req.SetMethod(consts.MethodPost)
