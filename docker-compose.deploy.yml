@@ -77,6 +77,40 @@ services:
     networks:
       - appnet
 
+  brainz-schedules:
+    build:
+      context: .
+      dockerfile: ./services/BrainzSchedules/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_started
+      brainz-auth:
+        condition: service_started
+    ports:
+      - "${SCHEDULES_PORT:-8080}:1111"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_LESSON_NAME}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      AUTH_SERVICE_URL: http://brainz-auth:8080
+      APP_PORT: 8080
+      APP_ADDRESS: 0.0.0.0
+      APP_ENV: ${APP_ENV:-development}
+      PEPPER: ${DEVELOPER_CREDS_PEPPER}
+      ARGON2_MEMORY: ${ARGON2_MEMORY}
+      ARGON2_TIME: ${ARGON2_TIME}
+      ARGON2_THREADS: ${ARGON2_THREADS}
+    networks:
+      - appnet
   swagger-ui:
     image: swaggerapi/swagger-ui:latest
     restart: unless-stopped
