@@ -90,7 +90,7 @@ services:
       brainz-auth:
         condition: service_started
     ports:
-      - "${SCHEDULES_PORT:-7078}:1111"
+      - "${SCHEDULES_PORT:-7078}:7078"
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
