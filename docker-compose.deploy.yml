@@ -90,7 +90,7 @@ services:
       brainz-auth:
         condition: service_started
     ports:
-      - "${SCHEDULES_PORT:-8080}:1111"
+      - "${SCHEDULES_PORT:-7078}:1111"
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -102,7 +102,7 @@ services:
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       AUTH_SERVICE_URL: http://brainz-auth:8080
-      APP_PORT: 8080
+      APP_PORT: 7078
       APP_ADDRESS: 0.0.0.0
       APP_ENV: ${APP_ENV:-development}
       PEPPER: ${DEVELOPER_CREDS_PEPPER}
