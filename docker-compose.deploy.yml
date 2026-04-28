@@ -1,6 +1,25 @@
 name: brainz-api
 
 services:
+
+  brainz-parser:
+    build: ./services/BrainzParser
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    ports:
+      - '4444:80'
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_LESSON_NAME}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+    networks:
+      - appnet
   brainz-auth:
     build:
       context: .
