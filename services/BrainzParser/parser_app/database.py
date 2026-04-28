@@ -1,5 +1,3 @@
-import datetime
-
 import psycopg2  # type: ignore
 
 from parser_app import utils
@@ -10,7 +8,7 @@ def get_group_ids(conn, institution_id: int, group_names: set[str]) -> dict[str,
     cursor = conn.cursor()
     cursor.execute(
         """
-		SELECT name, id FROM groups 
+		SELECT name, id FROM groups
 		WHERE institution_id = %s AND LOWER(name) = ANY(%s)
 		""",
         (institution_id, list(group_names))
