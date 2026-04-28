@@ -14,6 +14,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	wsWriteWait  = 10 * time.Second
+	wsPongWait   = 60 * time.Second
+	wsPingPeriod = (wsPongWait * 9) / 10
+)
+
 var upgrader = websocket.HertzUpgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -61,27 +67,37 @@ func InfoStreamHandler(ctx context.Context, c *app.RequestContext) {
 			zap.String("client_id", client.ID),
 			zap.String("remote_addr", conn.RemoteAddr().String()))
 
-		// Отдельная горутина для отправки сообщений
+		// Single writer goroutine: all writes (data + ping) must be serialized.
 		go func() {
-			for msg := range client.Send {
-				if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-					log.Println("write error:", err)
-					return
+			ticker := time.NewTicker(wsPingPeriod)
+			defer ticker.Stop()
+			for {
+				select {
+				case msg, ok := <-client.Send:
+					if !ok {
+						return
+					}
+					_ = conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+					if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+						log.Println("write error:", err)
+						return
+					}
+				case <-ticker.C:
+					_ = conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+						log.Println("ping error:", err)
+						return
+					}
 				}
 			}
 		}()
 
+		_ = conn.SetReadDeadline(time.Now().Add(wsPongWait))
 		conn.SetPongHandler(func(string) error {
-			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			_ = conn.SetReadDeadline(time.Now().Add(wsPongWait))
 			return nil
 		})
-
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		conn.SetPingHandler(func(string) error {
-			conn.WriteMessage(websocket.PongMessage, nil)
-			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-			return nil
-		})
+		// Keep default ping handler; it replies with pong safely.
 
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
