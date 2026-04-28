@@ -37,21 +37,46 @@ async def api_key_middleware(
             content={"status": False, "error": "Institution ID is required"}
         )
 
-    needed_rights = {"perm": {"action": "write", "institution_id": int(institution_id)}}
+    try:
+        institution_id_int = int(institution_id)
+        if institution_id_int <= 0:
+            raise ValueError("institution_id must be positive")
+    except ValueError:
+        return JSONResponse(
+            status_code=400,
+            content={"status": False, "error": "Institution ID must be a positive integer"}
+        )
+
+    needed_rights = {"perm": {"action": "write", "institution_id": institution_id_int}}
 
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.get(AUTH_SERVICE_URL, params={"key": api_key}, timeout=5.0, )
+            resp = await client.post(
+                AUTH_SERVICE_URL,
+                json=needed_rights,
+                headers={
+                    "X-API-Key": api_key,
+                    "X-Original-IP": request.client.host if request.client else "",
+                    "X-Original-Path": request.url.path,
+                    "X-Original-Method": request.method,
+                },
+                timeout=5.0,
+            )
             data = resp.json()
         except httpx.RequestError:
             return JSONResponse(
                 status_code=500,
                 content={"status": False, "error": "Auth service unavailable"}
             )
+        except ValueError:
+            return JSONResponse(
+                status_code=500,
+                content={"status": False, "error": "Invalid auth service response"}
+            )
 
     if not data.get("status", False):
         return JSONResponse(
-            status_code=401,
+            status_code=401 if resp.status_code == 200 else resp.status_code,
             content={"status": False, "error": data.get("error", "Invalid API key")}
         )
 

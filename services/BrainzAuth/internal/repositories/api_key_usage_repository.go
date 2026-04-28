@@ -34,7 +34,7 @@ func (akur *ApiKeyUsageRepository) Create(ctx context.Context, key *models.ApiKe
 		Values(key.ID, key.ApiKeyID, key.Endpoint, key.Method, key.UsageAt, key.ResponseCode).
 		Suffix(`
 		RETURNING
-			id, api_key_id, endpoint, usage_at, response_code
+			id, api_key_id, endpoint, method, usage_at, response_code
 	`).PlaceholderFormat(sq.Dollar)
 	sqlQuery, args, err := queryBuilder.ToSql()
 	if err != nil {
