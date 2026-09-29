@@ -12,6 +12,7 @@ import (
 	"net/url"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/hertz-contrib/cors"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -60,6 +61,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	hostPort := fmt.Sprintf("%s:%d", cfg.App.Address, cfg.App.Port)
 	h := server.Default(server.WithHostPorts(hostPort))
+
+	corsCfg := cors.DefaultConfig()
+	corsCfg.AllowAllOrigins = true
+	corsCfg.AllowWebSockets = true
+	corsCfg.AddAllowHeaders("Authorization", "Accept", "X-Requested-With", "X-Api-Key", "X-Session-Token")
+	h.Use(cors.New(corsCfg))
 
 	router.Register(ctx, h, sh, ih, gh)
 

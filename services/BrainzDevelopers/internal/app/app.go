@@ -78,23 +78,23 @@ func corsAllowHeaders(extra string) []string {
 
 func corsFromConfig(cfg *config.Config) *cors.Config {
 	corsCfg := cors.DefaultConfig()
-	corsCfg.AllowAllOrigins = false
+	corsCfg.AllowAllOrigins = true
 	corsCfg.AllowCredentials = true
 	corsCfg.AllowHeaders = corsAllowHeaders(cfg.CorsExtraAllowHeaders)
 	// Expose-Headers: avoid "*" with credentials; list what browser scripts may read on responses.
 	corsCfg.ExposeHeaders = []string{"Content-Type", "Content-Length"}
 
-	allowed := cfg.CorsOriginSet()
-	if len(allowed) == 0 {
-		// Dev: reflect any non-empty Origin (not "*"), required when the browser sends credentials.
-		corsCfg.AllowOriginFunc = func(origin string) bool {
-			return origin != ""
-		}
-	} else {
-		corsCfg.AllowOriginFunc = func(origin string) bool {
-			return allowed[origin]
-		}
-	}
+	// allowed := cfg.CorsOriginSet()
+	// if len(allowed) == 0 {
+	// 	// Dev: reflect any non-empty Origin (not "*"), required when the browser sends credentials.
+	// 	corsCfg.AllowOriginFunc = func(origin string) bool {
+	// 		return origin != ""
+	// 	}
+	// } else {
+	// 	corsCfg.AllowOriginFunc = func(origin string) bool {
+	// 		return allowed[origin]
+	// 	}
+	// }
 	return &corsCfg
 }
 

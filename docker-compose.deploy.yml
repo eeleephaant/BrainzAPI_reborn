@@ -1,7 +1,6 @@
 name: brainz-api
 
 services:
-
   brainz-parser:
     build: ./services/BrainzParser
     depends_on:
@@ -9,7 +8,7 @@ services:
         condition: service_healthy
         restart: true
     ports:
-      - '4444:80'
+      - "4444:80"
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -130,6 +129,7 @@ services:
       ARGON2_THREADS: ${ARGON2_THREADS}
     networks:
       - appnet
+
   swagger-ui:
     image: swaggerapi/swagger-ui:latest
     restart: unless-stopped
@@ -156,7 +156,11 @@ services:
       DB_LESSON_NAME: ${DB_LESSON_NAME}
       DB_DEVS_NAME: ${DB_DEVS_NAME}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_LESSON_NAME} && pg_isready -U $${DB_USER} -d $${DB_DEVS_NAME}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${DB_USER} -d $${DB_LESSON_NAME} && pg_isready -U $${DB_USER} -d $${DB_DEVS_NAME}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

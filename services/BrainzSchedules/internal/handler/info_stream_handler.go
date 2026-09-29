@@ -24,12 +24,7 @@ var upgrader = websocket.HertzUpgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(ctx *app.RequestContext) bool {
-		origin := string(ctx.GetHeader("Origin"))
-		allowedOrigins := map[string]bool{
-			"https://pentapulse.ru": true,
-			"":                      true,
-		}
-		return allowedOrigins[origin]
+		return true
 	},
 	EnableCompression: true,
 	HandshakeTimeout:  10 * time.Second,
